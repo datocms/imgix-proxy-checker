@@ -237,7 +237,8 @@ table {
   display: block;
   max-width: 100%;
   max-height: 320px;
-  background: repeating-conic-gradient(var(--border) 0 25%, transparent 0 50%) 0 0 / 16px 16px;
+  background: repeating-conic-gradient(var(--border) 0 25%, transparent 0 50%) 0
+    0 / 16px 16px;
 }
 
 .noimg {
@@ -321,12 +322,12 @@ button.secondary {
   gap: 8px;
 }
 
-.param-row.is-disabled input:not([type='checkbox']) {
+.param-row.is-disabled input:not([type="checkbox"]) {
   opacity: 0.45;
   text-decoration: line-through;
 }
 
-.param-row input[type='checkbox'] {
+.param-row input[type="checkbox"] {
   margin-top: 10px;
   width: 16px;
   height: 16px;
@@ -387,7 +388,8 @@ button.secondary {
   border: 1px solid var(--border);
   border-radius: 4px;
   overflow: hidden;
-  background: repeating-conic-gradient(var(--border) 0 25%, transparent 0 50%) 0 0 / 10px 10px;
+  background: repeating-conic-gradient(var(--border) 0 25%, transparent 0 50%) 0
+    0 / 10px 10px;
 }
 
 .thumb > img:first-child {
@@ -461,7 +463,8 @@ a.param-hint:hover {
   height: 320px;
   margin-top: 4px;
   object-fit: contain;
-  background: repeating-conic-gradient(var(--border) 0 25%, transparent 0 50%) 0 0 / 16px 16px;
+  background: repeating-conic-gradient(var(--border) 0 25%, transparent 0 50%) 0
+    0 / 16px 16px;
 }
 
 .group-tag {
@@ -486,4 +489,106 @@ a.param-hint:hover {
   margin: 0;
   font-size: 12px;
   color: var(--muted);
+}
+
+.endpoints {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.endpoint {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-self: stretch;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.endpoint-origin {
+  border-top: 3px solid var(--accent);
+}
+
+.endpoint-proxy {
+  border-top: 3px solid var(--muted);
+}
+
+.endpoint h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.endpoint-subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.facts {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+.facts > div {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: 8px;
+}
+
+.facts dt {
+  color: var(--muted);
+}
+
+.facts dd {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+}
+
+.facts dd.is-missing {
+  color: var(--muted);
+}
+
+.forward-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.forward-arrow svg {
+  stroke: currentColor;
+}
+
+@media (max-width: 800px) {
+  .endpoints {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Stacked, origin sits above the proxy, so the arrow points up. */
+  .forward-arrow svg {
+    transform: rotate(90deg);
+    margin: 28px 0;
+  }
+}
+
+.facts dd .muted {
+  word-break: normal;
+}
+
+@media (max-width: 640px) {
+  .param-row {
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
 }

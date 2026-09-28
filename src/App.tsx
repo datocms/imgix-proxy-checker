@@ -1,11 +1,11 @@
-import { type ClipboardEvent, Fragment, type ReactNode, useEffect, useRef, useState } from 'react';
+import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { isPreviewable, type ProbeResult } from '../lib/analyze.js';
-import { INVALID_FILENAME_MESSAGE, isDatoImageFilename } from '../lib/filename.js';
 import { compare, formatBytes, type Level, type Verdict } from './compare';
 import { DIFF_TOLERANCE, diffImages, type PixelDiff } from './diff';
+import { Endpoints, ORIGIN_HOST } from './Endpoints';
 import { newParam, ParamGrid, paramsFromQuery } from './ParamGrid';
-import { parseUrlInput, type UrlFields } from './parse';
+import { resolveEndpoints } from './parse';
 import { detectServer, probe, type ServerInfo } from './probe';
 import {
   buildTestCases,
@@ -15,7 +15,6 @@ import {
   type TestGroup,
 } from './tests';
 
-const ORIGIN_HOST = 'https://www.datocms-assets.com';
 const PARALLEL_REQUESTS = 4;
 const CACHE_HEADERS = ['cf-cache-status', 'x-cache', 'age', 'cache-control', 'vary'];
 const ZOOM_WIDTH = 372;
@@ -29,6 +28,13 @@ type Settings = {
   projectId: string;
   filename: string;
   proxyPrefix: string;
+  params: QueryParam[];
+};
+
+/** What the user typed or pasted; `Settings` derives from it. */
+type Inputs = {
+  origin: string;
+  proxy: string;
   params: QueryParam[];
 };
 
@@ -58,33 +64,12 @@ const SECTIONS: { key: SectionKey; title: string }[] = [
 
 const COLUMN_COUNT = 8;
 
-const hasParams = (params: QueryParam[]) => params.some(({ key }) => key.trim());
-
-/** Turns parsed URL fields into a settings patch; a pasted query replaces the grid. */
-const toSettingsPatch = ({ query, ...fields }: UrlFields): Partial<Settings> => ({
-  ...fields,
-  ...(query ? { params: paramsFromQuery(query) } : {}),
-});
-
-/** Cleans up a hand-typed proxy prefix: adds https://, splits off a pasted filename or query. */
-const normalizeSettings = (settings: Settings): Settings => {
-  const parsed = parseUrlInput(settings.proxyPrefix);
-  if (!parsed?.proxyPrefix) return settings;
-  return {
-    ...settings,
-    proxyPrefix: parsed.proxyPrefix,
-    filename: settings.filename || parsed.filename || '',
-    params:
-      hasParams(settings.params) || !parsed.query ? settings.params : paramsFromQuery(parsed.query),
-  };
-};
-
 /**
  * All state lives in the page's query string, so a link reproduces a run and nothing is stored.
  * Enabled params go in `query`, disabled ones in `off`. `extraParams` and `customQueries` are
  * read for links made before the param grid.
  */
-const readSettings = (): Settings => {
+const readInputs = (): Inputs => {
   const search = new URLSearchParams(window.location.search);
   const query =
     search.get('query') ??
@@ -95,13 +80,22 @@ const readSettings = (): Settings => {
     ...param,
     isEnabled: false,
   }));
-  return normalizeSettings({
-    projectId: search.get('projectId') ?? '',
-    filename: search.get('filename') ?? '',
-    proxyPrefix: search.get('proxyPrefix') ?? '',
+  const projectId = search.get('projectId') ?? '';
+  const filename = search.get('filename') ?? '';
+  const proxyPrefix = search.get('proxyPrefix') ?? '';
+  return {
+    origin: projectId && filename ? `${ORIGIN_HOST}/${projectId}/${filename}` : projectId,
+    proxy: proxyPrefix && `${proxyPrefix.replace(/\/?$/, '/')}${filename}`,
     params: [...paramsFromQuery(query), ...disabled],
-  });
+  };
 };
+
+const toSettings = (inputs: Inputs): Settings => {
+  const { projectId, filename, proxyPrefix } = resolveEndpoints(inputs.origin, inputs.proxy);
+  return { projectId, filename, proxyPrefix, params: inputs.params };
+};
+
+const isRunnable = (inputs: Inputs) => resolveEndpoints(inputs.origin, inputs.proxy).isComplete;
 
 const shareUrl = (settings: Settings) => {
   const search = new URLSearchParams();
@@ -115,11 +109,6 @@ const shareUrl = (settings: Settings) => {
   for (const [key, value] of Object.entries(fields)) if (value) search.set(key, value);
   return `${window.location.origin}${window.location.pathname}?${search}`;
 };
-
-const isRunnable = (settings: Settings) =>
-  /^\d+$/.test(settings.projectId) &&
-  isDatoImageFilename(settings.filename) &&
-  Boolean(parseUrlInput(settings.proxyPrefix)?.proxyPrefix);
 
 const withQuery = (base: string, query: string) => (query ? `${base}?${query}` : base);
 
@@ -316,8 +305,7 @@ const Side = ({ title, result }: { title: string; result?: ProbeResult }) => {
 };
 
 export const App = () => {
-  const [settings, setSettings] = useState<Settings>(readSettings);
-  const [pasted, setPasted] = useState('');
+  const [inputs, setInputs] = useState<Inputs>(readInputs);
   const [rows, setRows] = useState<Row[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -326,30 +314,17 @@ export const App = () => {
   const hasAutoRun = useRef(false);
   const maskUrls = useRef<string[]>([]);
 
-  const update = (patch: Partial<Settings>) => setSettings((current) => ({ ...current, ...patch }));
-
-  const applyUrlInput = (raw: string) => {
-    const parsed = parseUrlInput(raw);
-    if (parsed) update(toSettingsPatch(parsed));
-    return Boolean(parsed);
-  };
-
-  /** Parses a pasted URL into fields instead of dumping it into one input. */
-  const handlePaste = (event: ClipboardEvent<HTMLInputElement>) => {
-    if (applyUrlInput(event.clipboardData.getData('text'))) event.preventDefault();
-  };
-
-  const isReady = isRunnable(settings) && server?.isAvailable === true;
+  const update = (patch: Partial<Inputs>) => setInputs((current) => ({ ...current, ...patch }));
+  const resolved = resolveEndpoints(inputs.origin, inputs.proxy);
+  const isReady = resolved.isComplete && server?.isAvailable === true;
 
   const copyShareLink = async () => {
-    await navigator.clipboard.writeText(shareUrl(normalizeSettings(settings)));
+    await navigator.clipboard.writeText(shareUrl(toSettings(inputs)));
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 1500);
   };
 
-  const run = async (rawSettings: Settings) => {
-    const current = normalizeSettings(rawSettings);
-    setSettings(current);
+  const run = async (current: Settings) => {
     window.history.replaceState(null, '', shareUrl(current));
     setExpanded(null);
     setIsRunning(true);
@@ -393,9 +368,9 @@ export const App = () => {
   useEffect(() => {
     detectServer().then((info) => {
       setServer(info);
-      if (hasAutoRun.current || !info.isAvailable || !isRunnable(settings)) return;
+      if (hasAutoRun.current || !info.isAvailable || !isRunnable(inputs)) return;
       hasAutoRun.current = true;
-      run(settings);
+      run(toSettings(inputs));
     });
   }, []);
 
@@ -425,67 +400,24 @@ export const App = () => {
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          run(settings);
+          run(toSettings(inputs));
         }}
       >
-        <label className="wide">
-          Paste a URL (origin or proxied) to fill the fields
-          <input
-            value={pasted}
-            onChange={(event) => {
-              setPasted(event.target.value);
-              applyUrlInput(event.target.value);
-            }}
-            placeholder="https://www.datocms-assets.com/12345/1700000000-photo.png?w=800"
-          />
-        </label>
-        <label>
-          Project ID
-          <input
-            value={settings.projectId}
-            onChange={(event) => update({ projectId: event.target.value.trim() })}
-            onPaste={handlePaste}
-            placeholder="12345"
-            required
-          />
-          {settings.projectId && !/^\d+$/.test(settings.projectId) && (
-            <span className="warn-text">Project IDs are numeric.</span>
-          )}
-        </label>
-        <label>
-          Filename
-          <input
-            value={settings.filename}
-            onChange={(event) => update({ filename: event.target.value.trim() })}
-            onPaste={handlePaste}
-            placeholder="1700000000-photo.png"
-            required
-          />
-          {settings.filename && !isDatoImageFilename(settings.filename) && (
-            <span className="warn-text">{INVALID_FILENAME_MESSAGE}</span>
-          )}
-        </label>
-        <label className="wide">
-          <span>
-            Proxy prefix (replaces <code>{ORIGIN_HOST}/&lt;project&gt;/</code>). Paste a full
-            proxied URL and it splits off the filename and params.
-          </span>
-          <input
-            value={settings.proxyPrefix}
-            onChange={(event) => update({ proxyPrefix: event.target.value })}
-            onPaste={handlePaste}
-            onBlur={() => setSettings(normalizeSettings)}
-            placeholder="https://example.com/assets/"
-            required
-          />
-        </label>
+        <Endpoints
+          originInput={inputs.origin}
+          proxyInput={inputs.proxy}
+          resolved={resolved}
+          onOriginChange={(origin) => update({ origin })}
+          onProxyChange={(proxy) => update({ proxy })}
+          onQuery={(query) => update({ params: paramsFromQuery(query) })}
+        />
         <div className="wide params-field">
           <span className="field-label">
             Your query params: run as their own test under each simulated <code>Accept</code>{' '}
             header. Paste a query string or URL into a name field to fill several rows.
           </span>
           <ParamGrid
-            params={settings.params.length ? settings.params : [newParam()]}
+            params={inputs.params.length ? inputs.params : [newParam()]}
             onChange={(params) => update({ params })}
           />
         </div>
@@ -506,7 +438,7 @@ export const App = () => {
           <button
             type="button"
             className="secondary"
-            disabled={!isRunnable(settings)}
+            disabled={!resolved.isComplete}
             onClick={copyShareLink}
           >
             {isCopied ? 'Copied' : 'Copy share link'}

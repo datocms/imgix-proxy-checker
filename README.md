@@ -32,7 +32,12 @@ The page stores every setting in its query string and runs on load when the link
 | `query` | Enabled params from the grid, as a query string |
 | `off` | Disabled params from the grid, as a query string |
 
-The proxy prefix field accepts messy input. It adds a missing `https://`, and when you paste a full proxied URL it moves the filename and query into their own fields.
+The page has two boxes, laid out like the request path: the customer's proxy (right) forwards to DatoCMS (left).
+
+- **Origin (DatoCMS):** paste a `www.datocms-assets.com` URL, or just the project ID.
+- **Proxy (customer):** paste the customer's URL, or just its asset path.
+
+Each box shows the values it parsed, read-only. Either box can supply the filename. Both boxes add a missing `https://`, and move a pasted query string into the param grid.
 
 ## imgix parameters
 
