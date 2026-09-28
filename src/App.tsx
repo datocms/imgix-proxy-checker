@@ -49,7 +49,7 @@ type Row = {
 /** Shown beside each test's label, since sections group rows by verdict. */
 const GROUP_TAGS: Record<TestGroup, string> = {
   negotiation: 'negotiation',
-  vary: 'cache key',
+  vary: 'cache',
   params: 'param',
   custom: 'your query',
 };
@@ -467,16 +467,19 @@ export const App = () => {
             </p>
             <div className="filters" role="group" aria-label="Show results">
               {LEVEL_ORDER.map((level) => (
-                <button
+                <label
                   key={level}
-                  type="button"
                   className={`filter${visibleLevels[level] ? '' : ' is-off'}`}
-                  aria-pressed={visibleLevels[level]}
                   title={`${visibleLevels[level] ? 'Hide' : 'Show'} ${LEVEL_NAMES[level]} rows`}
-                  onClick={() => toggleLevel(level)}
                 >
-                  <Badge level={level} /> {counts[level]}
-                </button>
+                  <input
+                    type="checkbox"
+                    checked={visibleLevels[level]}
+                    onChange={() => toggleLevel(level)}
+                  />
+                  <Badge level={level} />
+                  <span className="filter-count">{counts[level]}</span>
+                </label>
               ))}
             </div>
           </div>

@@ -22,6 +22,8 @@ export type TestCase = {
   failureHint?: string;
   /** Caps the verdict, for checks that only matter when a customer uses a feature. */
   maxLevel?: 'warn';
+  /** Warns when the proxy lets shared caches keep the image longer than DatoCMS purges allow. */
+  checkTtl?: boolean;
 };
 
 export const ACCEPT_PROFILES = {
@@ -103,6 +105,15 @@ const buildVaryCases = (): TestCase[] => {
   const corsQuery = `w=${uniqueWidth(801)}`;
   const generic = ACCEPT_PROFILES.generic;
   return [
+    {
+      id: 'cache-ttl',
+      group: 'vary',
+      label: 'Cache lifetime',
+      query: 'w=400',
+      accept: generic.value,
+      acceptLabel: generic.label,
+      checkTtl: true,
+    },
     {
       id: 'vary-origin-with',
       group: 'vary',

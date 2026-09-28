@@ -613,22 +613,32 @@ button.secondary {
 
 .filter {
   display: inline-flex;
+  flex-direction: row;
   align-items: center;
   gap: 6px;
-  padding: 2px 4px;
-  border: 0;
+  padding: 2px 6px;
   border-radius: 6px;
-  background: transparent;
   color: var(--text);
   font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.filter input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 .filter:hover {
   background: var(--hl);
 }
 
-.filter.is-off {
-  opacity: 0.4;
+.filter.is-off .badge,
+.filter.is-off .filter-count {
+  opacity: 0.45;
 }
 
 .filter.is-off .badge {
