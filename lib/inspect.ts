@@ -1,4 +1,5 @@
 import { analyzeBody, emptyStats, isPreviewable, type ProbeResult } from './analyze.js';
+import { INVALID_FILENAME_MESSAGE, isDatoImageUrl } from './filename.js';
 
 /** Base64 inflates by a third; this keeps the JSON under Vercel's 4.5 MB response limit. */
 const MAX_PREVIEW_BYTES = 2_500_000;
@@ -14,17 +15,20 @@ const NO_STORE = {
  * Only public https hosts. Blocks IP literals and local names so the endpoint can't reach
  * internal networks, and returns JSON metadata rather than raw bodies so it's a poor open proxy.
  */
-const isAllowedTarget = (raw: string) => {
+const isPublicHttps = ({ protocol, hostname }: URL) =>
+  protocol === 'https:' &&
+  hostname.includes('.') &&
+  !/^[\d.]+$|^\[|:/.test(hostname) &&
+  !/\.(local|internal|localhost)$/.test(hostname);
+
+/** Returns why `raw` can't be inspected, or null when it can. Runs before any upstream fetch. */
+const rejectTarget = (raw: string) => {
   try {
-    const { protocol, hostname } = new URL(raw);
-    return (
-      protocol === 'https:' &&
-      hostname.includes('.') &&
-      !/^[\d.]+$|^\[|:/.test(hostname) &&
-      !/\.(local|internal|localhost)$/.test(hostname)
-    );
+    const url = new URL(raw);
+    if (!isPublicHttps(url)) return 'url must be a public https URL';
+    return isDatoImageUrl(url) ? null : INVALID_FILENAME_MESSAGE;
   } catch {
-    return false;
+    return 'url is malformed';
   }
 };
 
@@ -81,11 +85,9 @@ export const handleInspectRequest = async (request: Request) => {
   }
 
   const url = params.get('url') ?? '';
-  if (!isAllowedTarget(url)) {
-    return Response.json(
-      { error: 'url must be a public https URL' },
-      { status: 400, headers: NO_STORE },
-    );
+  const rejection = rejectTarget(url);
+  if (rejection) {
+    return Response.json({ error: rejection }, { status: 400, headers: NO_STORE });
   }
 
   return Response.json(await inspect(url, params.get('accept') ?? '*/*'), { headers: NO_STORE });

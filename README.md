@@ -33,6 +33,10 @@ The page stores every setting in its query string and runs on load when the link
 | `customQueries` | Newline-separated extra test queries |
 | `mode` | `server` (default) or `browser` |
 
+## Hosting
+
+Vercel runs the function in `dub1` (Dublin), set in `vercel.json`, so requests to both hosts leave from the EU.
+
 ## Development
 
 ```sh
@@ -44,4 +48,4 @@ The Vite dev and preview servers mount the same handler that Vercel serves at `/
 
 ## `/api/inspect`
 
-`GET /api/inspect?url=<https URL>&accept=<Accept header>` returns JSON. The response has status, headers, sniffed format, dimensions, byte count, SHA-256 and, when the body is under 2.5 MB, a data URL preview. The endpoint rejects anything other than public `https` hostnames. It never returns raw bodies, which keeps it from working as a general proxy.
+`GET /api/inspect?url=<https URL>&accept=<Accept header>` returns JSON. The response has status, headers, sniffed format, dimensions, byte count, SHA-256 and, when the body is under 2.5 MB, a data URL preview. The endpoint fails fast with a 400, before any upstream fetch, unless the URL is on a public `https` hostname and ends in a DatoCMS image filename (`<unix timestamp>-<slug>.<image extension>`). On `www.datocms-assets.com`, it also requires the `/<projectId>/` prefix. It never returns raw bodies, which keeps it from working as a general proxy.

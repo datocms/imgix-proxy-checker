@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { compare, formatBytes, type Level, type Verdict } from './compare';
 import type { ProbeResult, ProbeVia } from '../lib/analyze.js';
+import { INVALID_FILENAME_MESSAGE, isDatoImageFilename } from '../lib/filename.js';
 import { detectServer, probe, type ServerInfo } from './probe';
 import { buildTestCases, type TestCase, type TestGroup } from './tests';
 
@@ -55,7 +56,11 @@ const shareUrl = (settings: Settings) => {
 };
 
 const hasSharedSettings = (settings: Settings) =>
-  Boolean(settings.projectId && settings.filename && settings.proxyPrefix);
+  Boolean(
+    /^\d+$/.test(settings.projectId) &&
+    isDatoImageFilename(settings.filename) &&
+    settings.proxyPrefix,
+  );
 
 const withQuery = (base: string, query: string) => (query ? `${base}?${query}` : base);
 
@@ -282,6 +287,9 @@ export const App = () => {
             placeholder="12345"
             required
           />
+          {settings.projectId && !/^\d+$/.test(settings.projectId) && (
+            <span className="warn-text">Project IDs are numeric.</span>
+          )}
         </label>
         <label>
           Filename
@@ -291,6 +299,9 @@ export const App = () => {
             placeholder="1700000000-photo.png"
             required
           />
+          {settings.filename && !isDatoImageFilename(settings.filename) && (
+            <span className="warn-text">{INVALID_FILENAME_MESSAGE}</span>
+          )}
         </label>
         <label className="wide">
           <span>
