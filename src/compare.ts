@@ -78,12 +78,19 @@ export const compare = (test: TestCase, original: ProbeResult, proxied: ProbeRes
 
   for (const [name, isRequired] of Object.entries(RELAYED_HEADERS)) {
     const expected = original.headers[name];
-    // In browser mode only CORS-safelisted headers are visible, so absence proves nothing.
-    if (!expected || proxied.via !== 'server') continue;
-    if (proxied.headers[name] !== expected) {
+    if (!expected) continue;
+    const actual = proxied.headers[name];
+    if (name === 'access-control-allow-origin' && actual && actual !== '*' && expected === '*') {
+      flag(
+        'warn',
+        `Proxy sent access-control-allow-origin "${actual}" to a request without an Origin header. Its cache key ignores Origin, so it serves a CORS header cached for another site. Add Origin to the proxy's cache key.`,
+      );
+      continue;
+    }
+    if (actual !== expected) {
       flag(
         isRequired ? 'fail' : 'warn',
-        `${name}: origin "${expected}", proxy "${proxied.headers[name] ?? '(missing)'}".`,
+        `${name}: origin "${expected}", proxy "${actual ?? '(missing)'}".`,
       );
     }
   }

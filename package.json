@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "update:imgix-params": "node scripts/update-imgix-params.mjs"
   },
   "dependencies": {
     "image-size": "^2.0.4",

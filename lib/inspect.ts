@@ -53,7 +53,6 @@ export const inspect = async (url: string, accept: string): Promise<ProbeResult>
       status: response.status,
       ms,
       headers: Object.fromEntries(response.headers),
-      via: 'server',
       previewUrl: hasPreview
         ? `data:${contentType};base64,${Buffer.from(body).toString('base64')}`
         : null,
@@ -67,7 +66,6 @@ export const inspect = async (url: string, accept: string): Promise<ProbeResult>
       error: `Server fetch failed: ${(error as Error).message}`,
       ms: Math.round(performance.now() - startedAt),
       headers: {},
-      via: 'server',
       previewUrl: null,
     };
   }

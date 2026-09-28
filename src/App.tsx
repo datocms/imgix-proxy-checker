@@ -1,21 +1,29 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
-import { compare, formatBytes, type Level, type Verdict } from './compare';
-import type { ProbeResult, ProbeVia } from '../lib/analyze.js';
+import { type ClipboardEvent, Fragment, useEffect, useRef, useState } from 'react';
+import { isPreviewable, type ProbeResult } from '../lib/analyze.js';
 import { INVALID_FILENAME_MESSAGE, isDatoImageFilename } from '../lib/filename.js';
+import { compare, formatBytes, type Level, type Verdict } from './compare';
+import { newParam, ParamGrid, paramsFromQuery } from './ParamGrid';
+import { parseUrlInput, type UrlFields } from './parse';
 import { detectServer, probe, type ServerInfo } from './probe';
-import { buildTestCases, type TestCase, type TestGroup } from './tests';
+import {
+  buildTestCases,
+  type QueryParam,
+  serializeParams,
+  type TestCase,
+  type TestGroup,
+} from './tests';
 
 const ORIGIN_HOST = 'https://www.datocms-assets.com';
 const PARALLEL_REQUESTS = 4;
 const CACHE_HEADERS = ['cf-cache-status', 'x-cache', 'age', 'cache-control', 'vary'];
+const ZOOM_SIZE = 360;
+const ZOOM_GAP = 12;
 
 type Settings = {
   projectId: string;
   filename: string;
   proxyPrefix: string;
-  extraParams: string;
-  customQueries: string;
-  mode: ProbeVia;
+  params: QueryParam[];
 };
 
 type Row = {
@@ -25,67 +33,76 @@ type Row = {
   verdict?: Verdict;
 };
 
-const SETTING_KEYS: (keyof Settings)[] = [
-  'projectId',
-  'filename',
-  'proxyPrefix',
-  'extraParams',
-  'customQueries',
-  'mode',
-];
-
 const GROUP_TITLES: Record<TestGroup, string> = {
   negotiation: 'Format negotiation (auto=format) · simulated browser Accept headers',
   params: 'Common imgix params',
-  custom: 'Custom queries',
+  custom: 'Your query · simulated browser Accept headers',
 };
 
-/** All state lives in the query string, so a link reproduces a run and nothing is stored. */
+const hasParams = (params: QueryParam[]) => params.some(({ key }) => key.trim());
+
+/** Turns parsed URL fields into a settings patch; a pasted query replaces the grid. */
+const toSettingsPatch = ({ query, ...fields }: UrlFields): Partial<Settings> => ({
+  ...fields,
+  ...(query ? { params: paramsFromQuery(query) } : {}),
+});
+
+/** Cleans up a hand-typed proxy prefix: adds https://, splits off a pasted filename or query. */
+const normalizeSettings = (settings: Settings): Settings => {
+  const parsed = parseUrlInput(settings.proxyPrefix);
+  if (!parsed?.proxyPrefix) return settings;
+  return {
+    ...settings,
+    proxyPrefix: parsed.proxyPrefix,
+    filename: settings.filename || parsed.filename || '',
+    params:
+      hasParams(settings.params) || !parsed.query ? settings.params : paramsFromQuery(parsed.query),
+  };
+};
+
+/**
+ * All state lives in the page's query string, so a link reproduces a run and nothing is stored.
+ * Enabled params go in `query`, disabled ones in `off`. `extraParams` and `customQueries` are
+ * read for links made before the param grid.
+ */
 const readSettings = (): Settings => {
-  const params = new URLSearchParams(window.location.search);
-  const settings = Object.fromEntries(
-    SETTING_KEYS.map((key) => [key, params.get(key) ?? '']),
-  ) as Settings;
-  return { ...settings, mode: settings.mode === 'browser' ? 'browser' : 'server' };
+  const search = new URLSearchParams(window.location.search);
+  const query =
+    search.get('query') ??
+    search.get('extraParams') ??
+    search.get('customQueries')?.split('\n')[0] ??
+    '';
+  const disabled = paramsFromQuery(search.get('off') ?? '').map((param) => ({
+    ...param,
+    isEnabled: false,
+  }));
+  return normalizeSettings({
+    projectId: search.get('projectId') ?? '',
+    filename: search.get('filename') ?? '',
+    proxyPrefix: search.get('proxyPrefix') ?? '',
+    params: [...paramsFromQuery(query), ...disabled],
+  });
 };
 
 const shareUrl = (settings: Settings) => {
-  const params = new URLSearchParams();
-  for (const key of SETTING_KEYS) if (settings[key]) params.set(key, settings[key]);
-  return `${window.location.origin}${window.location.pathname}?${params}`;
+  const search = new URLSearchParams();
+  const fields = {
+    projectId: settings.projectId,
+    filename: settings.filename,
+    proxyPrefix: settings.proxyPrefix,
+    query: serializeParams(settings.params.filter(({ isEnabled }) => isEnabled)),
+    off: serializeParams(settings.params.filter(({ isEnabled }) => !isEnabled)),
+  };
+  for (const [key, value] of Object.entries(fields)) if (value) search.set(key, value);
+  return `${window.location.origin}${window.location.pathname}?${search}`;
 };
 
-const hasSharedSettings = (settings: Settings) =>
-  Boolean(
-    /^\d+$/.test(settings.projectId) &&
-    isDatoImageFilename(settings.filename) &&
-    settings.proxyPrefix,
-  );
+const isRunnable = (settings: Settings) =>
+  /^\d+$/.test(settings.projectId) &&
+  isDatoImageFilename(settings.filename) &&
+  Boolean(parseUrlInput(settings.proxyPrefix)?.proxyPrefix);
 
 const withQuery = (base: string, query: string) => (query ? `${base}?${query}` : base);
-
-/**
- * Fills settings from a pasted URL. An origin URL yields project, filename and params;
- * any other URL yields the proxy prefix and filename.
- */
-const parsePastedUrl = (raw: string): Partial<Settings> => {
-  const url = new URL(raw.trim());
-  const segments = url.pathname.split('/').filter(Boolean);
-  const extraParams = url.search.slice(1);
-  if (url.hostname.endsWith('datocms-assets.com')) {
-    return {
-      projectId: segments[0] ?? '',
-      filename: segments.slice(1).join('/'),
-      extraParams,
-    };
-  }
-  const filename = segments.at(-1) ?? '';
-  return {
-    proxyPrefix: `${url.origin}/${segments.slice(0, -1).join('/')}/`.replace(/\/+$/, '/'),
-    filename,
-    extraParams,
-  };
-};
 
 /** Runs `tasks` with at most `limit` in flight. */
 const runPool = async (tasks: (() => Promise<void>)[], limit: number) => {
@@ -103,65 +120,108 @@ const describe = (result?: ProbeResult) => {
   return `${result.format} · ${size} · ${formatBytes(result.bytes)}`;
 };
 
-const cacheSummary = (result?: ProbeResult) => {
-  if (result?.via !== 'server') return result?.headers['cache-control'] ?? '';
-  return ['cf-cache-status', 'x-cache', 'age']
-    .filter((name) => result.headers[name])
-    .map((name) => `${name}: ${result.headers[name]}`)
+const cacheSummary = (result?: ProbeResult) =>
+  ['cf-cache-status', 'x-cache', 'age']
+    .filter((name) => result?.headers[name])
+    .map((name) => `${name}: ${result?.headers[name]}`)
     .join(' · ');
+
+/** Bodies over the server's preview limit fall back to loading the raw URL. */
+const imageSource = (result?: ProbeResult) =>
+  result?.previewUrl ?? (result && isPreviewable(result.format) ? result.url : null);
+
+/** Places the enlarged preview beside the thumbnail, kept inside the viewport. */
+const zoomPosition = (anchor: DOMRect) => ({
+  left: Math.max(
+    ZOOM_GAP,
+    Math.min(anchor.right + ZOOM_GAP, window.innerWidth - ZOOM_SIZE - ZOOM_GAP),
+  ),
+  top: Math.max(
+    ZOOM_GAP,
+    Math.min(
+      anchor.top + anchor.height / 2 - ZOOM_SIZE / 2,
+      window.innerHeight - ZOOM_SIZE - ZOOM_GAP,
+    ),
+  ),
+});
+
+/** Thumbnail of the tested bytes. Hovering enlarges it; clicking opens the raw URL. */
+const Thumb = ({ result }: { result?: ProbeResult }) => {
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const source = imageSource(result);
+  if (!result || !source) return <span className="thumb thumb-empty" />;
+  return (
+    <a
+      href={result.url}
+      target="_blank"
+      rel="noreferrer"
+      className="thumb"
+      title="Open the raw URL in a new tab"
+      onClick={(event) => event.stopPropagation()}
+      onMouseEnter={(event) => setAnchor(event.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setAnchor(null)}
+    >
+      <img src={source} alt="" loading="lazy" />
+      {anchor && <img className="thumb-zoom" src={source} alt="" style={zoomPosition(anchor)} />}
+    </a>
+  );
 };
+
+const Result = ({ result }: { result?: ProbeResult }) => (
+  <div className="result-cell">
+    <Thumb result={result} />
+    <span>{describe(result)}</span>
+  </div>
+);
 
 const Badge = ({ level }: { level?: Level }) => (
   <span className={`badge badge-${level ?? 'pending'}`}>{level ?? 'running'}</span>
 );
 
-const Side = ({ title, result }: { title: string; result?: ProbeResult }) => (
-  <div className="side">
-    <h4>{title}</h4>
-    {result?.previewUrl ? (
-      <img src={result.previewUrl} alt={title} />
-    ) : (
-      <div className="noimg">No image</div>
-    )}
-    <a href={result?.url} target="_blank" rel="noreferrer" className="url">
-      {result?.url}
-    </a>
-    {result && (
-      <table className="headers">
-        <tbody>
-          <tr>
-            <th>status</th>
-            <td>{result.status}</td>
-          </tr>
-          <tr>
-            <th>sha256</th>
-            <td>{result.sha256.slice(0, 16)}</td>
-          </tr>
-          <tr>
-            <th>time</th>
-            <td>
-              {result.ms} ms (from {result.via})
-            </td>
-          </tr>
-          {result.finalUrl !== result.url && (
+const Side = ({ title, result }: { title: string; result?: ProbeResult }) => {
+  const source = imageSource(result);
+  return (
+    <div className="side">
+      <h4>{title}</h4>
+      {source ? <img src={source} alt={title} /> : <div className="noimg">No image</div>}
+      <a href={result?.url} target="_blank" rel="noreferrer" className="url">
+        {result?.url}
+      </a>
+      {result && (
+        <table className="headers">
+          <tbody>
             <tr>
-              <th>redirected to</th>
-              <td>{result.finalUrl}</td>
+              <th>status</th>
+              <td>{result.status}</td>
             </tr>
-          )}
-          {Object.entries(result.headers)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([name, value]) => (
-              <tr key={name} className={CACHE_HEADERS.includes(name) ? 'hl' : undefined}>
-                <th>{name}</th>
-                <td>{value}</td>
+            <tr>
+              <th>sha256</th>
+              <td>{result.sha256.slice(0, 16)}</td>
+            </tr>
+            <tr>
+              <th>time</th>
+              <td>{result.ms} ms</td>
+            </tr>
+            {result.finalUrl !== result.url && (
+              <tr>
+                <th>redirected to</th>
+                <td>{result.finalUrl}</td>
               </tr>
-            ))}
-        </tbody>
-      </table>
-    )}
-  </div>
-);
+            )}
+            {Object.entries(result.headers)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([name, value]) => (
+                <tr key={name} className={CACHE_HEADERS.includes(name) ? 'hl' : undefined}>
+                  <th>{name}</th>
+                  <td>{value}</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+};
 
 export const App = () => {
   const [settings, setSettings] = useState<Settings>(readSettings);
@@ -171,64 +231,60 @@ export const App = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [server, setServer] = useState<ServerInfo | null>(null);
   const [isCopied, setIsCopied] = useState(false);
-  const blobUrls = useRef<string[]>([]);
   const hasAutoRun = useRef(false);
 
   const update = (patch: Partial<Settings>) => setSettings((current) => ({ ...current, ...patch }));
 
-  const applyPasted = (raw: string) => {
-    setPasted(raw);
-    try {
-      update(parsePastedUrl(raw));
-    } catch {
-      // Not a full URL yet; wait for more input.
-    }
+  const applyUrlInput = (raw: string) => {
+    const parsed = parseUrlInput(raw);
+    if (parsed) update(toSettingsPatch(parsed));
+    return Boolean(parsed);
   };
 
-  const isReady = hasSharedSettings(settings);
-  const via: ProbeVia = settings.mode === 'server' && server?.isAvailable ? 'server' : 'browser';
+  /** Parses a pasted URL into fields instead of dumping it into one input. */
+  const handlePaste = (event: ClipboardEvent<HTMLInputElement>) => {
+    if (applyUrlInput(event.clipboardData.getData('text'))) event.preventDefault();
+  };
+
+  const isReady = isRunnable(settings) && server?.isAvailable === true;
 
   const copyShareLink = async () => {
-    await navigator.clipboard.writeText(shareUrl(settings));
+    await navigator.clipboard.writeText(shareUrl(normalizeSettings(settings)));
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 1500);
   };
 
-  const run = async (via: ProbeVia) => {
-    window.history.replaceState(null, '', shareUrl(settings));
-    for (const url of blobUrls.current) URL.revokeObjectURL(url);
-    blobUrls.current = [];
+  const run = async (rawSettings: Settings) => {
+    const current = normalizeSettings(rawSettings);
+    setSettings(current);
+    window.history.replaceState(null, '', shareUrl(current));
     setExpanded(null);
     setIsRunning(true);
 
-    const originBase = `${ORIGIN_HOST}/${settings.projectId}/${settings.filename}`;
-    const proxyBase = `${settings.proxyPrefix.replace(/\/?$/, '/')}${settings.filename}`;
-    const customQueries = settings.customQueries
-      .split('\n')
-      .map((line) => line.trim().replace(/^\?/, ''))
-      .filter(Boolean);
-    const tests = buildTestCases(settings.extraParams.replace(/^\?/, ''), customQueries);
+    const originBase = `${ORIGIN_HOST}/${current.projectId}/${current.filename}`;
+    const proxyBase = `${current.proxyPrefix}${current.filename}`;
+    const tests = buildTestCases(
+      serializeParams(current.params.filter(({ isEnabled }) => isEnabled)),
+    );
     setRows(tests.map((test) => ({ test })));
 
     const execute = async (test: TestCase) => {
       const [original, proxied] = await Promise.all([
-        probe(withQuery(originBase, test.query), test.accept, via),
-        probe(withQuery(proxyBase, test.query), test.accept, via),
+        probe(withQuery(originBase, test.query), test.accept),
+        probe(withQuery(proxyBase, test.query), test.accept),
       ]);
-      for (const { previewUrl } of [original, proxied])
-        if (previewUrl?.startsWith('blob:')) blobUrls.current.push(previewUrl);
       const verdict = compare(test, original, proxied);
-      setRows((current) =>
-        current.map((row) =>
-          row.test.id === test.id ? { test, original, proxied, verdict } : row,
-        ),
+      setRows((rows) =>
+        rows.map((row) => (row.test.id === test.id ? { test, original, proxied, verdict } : row)),
       );
     };
 
-    // Negotiation rows share one URL and must run in order to expose a poisoned cache.
-    for (const test of tests.filter((test) => test.group === 'negotiation')) await execute(test);
+    // Negotiation and user rows share a URL per group and must run in order to expose a
+    // poisoned cache; the param rows are independent.
+    const isSequential = (test: TestCase) => test.group !== 'params';
+    for (const test of tests.filter(isSequential)) await execute(test);
     await runPool(
-      tests.filter((test) => test.group !== 'negotiation').map((test) => () => execute(test)),
+      tests.filter((test) => !isSequential(test)).map((test) => () => execute(test)),
       PARALLEL_REQUESTS,
     );
     setIsRunning(false);
@@ -238,9 +294,9 @@ export const App = () => {
   useEffect(() => {
     detectServer().then((info) => {
       setServer(info);
-      if (hasAutoRun.current || !hasSharedSettings(settings)) return;
+      if (hasAutoRun.current || !info.isAvailable || !isRunnable(settings)) return;
       hasAutoRun.current = true;
-      run(settings.mode === 'server' && info.isAvailable ? 'server' : 'browser');
+      run(settings);
     });
   }, []);
 
@@ -260,22 +316,26 @@ export const App = () => {
         <p>
           Compares a reverse-proxied DatoCMS asset with the same asset on{' '}
           <code>www.datocms-assets.com</code>, across common imgix params and{' '}
-          <code>auto=format</code> negotiation. Nothing is cached or stored: every request goes
-          straight to both hosts, and all settings live in this page's URL.
+          <code>auto=format</code> negotiation. Requests go from the checker's server
+          {server?.region ? ` (${server.region})` : ''} straight to both hosts. Nothing is cached or
+          stored: all settings live in this page's URL.
         </p>
       </header>
 
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          run(via);
+          run(settings);
         }}
       >
         <label className="wide">
           Paste a URL (origin or proxied) to fill the fields
           <input
             value={pasted}
-            onChange={(event) => applyPasted(event.target.value)}
+            onChange={(event) => {
+              setPasted(event.target.value);
+              applyUrlInput(event.target.value);
+            }}
             placeholder="https://www.datocms-assets.com/12345/1700000000-photo.png?w=800"
           />
         </label>
@@ -284,6 +344,7 @@ export const App = () => {
           <input
             value={settings.projectId}
             onChange={(event) => update({ projectId: event.target.value.trim() })}
+            onPaste={handlePaste}
             placeholder="12345"
             required
           />
@@ -296,6 +357,7 @@ export const App = () => {
           <input
             value={settings.filename}
             onChange={(event) => update({ filename: event.target.value.trim() })}
+            onPaste={handlePaste}
             placeholder="1700000000-photo.png"
             required
           />
@@ -305,68 +367,48 @@ export const App = () => {
         </label>
         <label className="wide">
           <span>
-            Proxy prefix (replaces <code>{ORIGIN_HOST}/&lt;project&gt;/</code>)
+            Proxy prefix (replaces <code>{ORIGIN_HOST}/&lt;project&gt;/</code>). Paste a full
+            proxied URL and it splits off the filename and params.
           </span>
           <input
             value={settings.proxyPrefix}
-            onChange={(event) => update({ proxyPrefix: event.target.value.trim() })}
+            onChange={(event) => update({ proxyPrefix: event.target.value })}
+            onPaste={handlePaste}
+            onBlur={() => setSettings(normalizeSettings)}
             placeholder="https://example.com/assets/"
             required
           />
         </label>
-        <label className="wide">
-          Extra params added to every test (tests override clashes)
-          <input
-            value={settings.extraParams}
-            onChange={(event) => update({ extraParams: event.target.value.trim() })}
-            placeholder="auto=compress&q=90"
+        <div className="wide params-field">
+          <span className="field-label">
+            Your query params: run as their own test under each simulated <code>Accept</code>{' '}
+            header. Paste a query string or URL into a name field to fill several rows.
+          </span>
+          <ParamGrid
+            params={settings.params.length ? settings.params : [newParam()]}
+            onChange={(params) => update({ params })}
           />
-        </label>
-        <label className="wide">
-          Custom queries, one per line (sent with a simulated AVIF-capable Accept)
-          <textarea
-            value={settings.customQueries}
-            onChange={(event) => update({ customQueries: event.target.value })}
-            placeholder="w=1440&fm=webp&q=90"
-            rows={2}
-          />
-        </label>
-        <fieldset className="wide mode">
-          <legend>Fetch from</legend>
-          <label className="radio">
-            <input
-              type="radio"
-              checked={settings.mode === 'server'}
-              disabled={server?.isAvailable === false}
-              onChange={() => update({ mode: 'server' })}
-            />
-            Checker server{server?.region ? ` (${server.region})` : ''}: shows every header,
-            including CDN cache status
-          </label>
-          <label className="radio">
-            <input
-              type="radio"
-              checked={settings.mode === 'browser'}
-              onChange={() => update({ mode: 'browser' })}
-            />
-            This browser: hits your nearest CDN edge, but can only read Content-Type and
-            Cache-Control
-          </label>
-          {server?.isAvailable === false && (
-            <p className="warn-text">
-              Server function unreachable here, so requests go from the browser.
-            </p>
-          )}
-        </fieldset>
+        </div>
         <p className="wide sim-note">
-          <strong>Simulation:</strong> both modes set the <code>Accept</code> header by hand to
+          <strong>Simulation:</strong> the checker sets the <code>Accept</code> header by hand to
           imitate AVIF-capable, WebP-only and legacy clients. No real browser negotiation happens.
         </p>
+        {server?.isAvailable === false && (
+          <p className="wide warn-text">
+            The checker's server function is unreachable, so checks can't run. Use{' '}
+            <code>npm run dev</code> or the Vercel deployment.
+          </p>
+        )}
         <div className="actions wide">
           <button type="submit" disabled={!isReady || isRunning}>
             {isRunning ? 'Running…' : 'Run checks'}
           </button>
-          <button type="button" className="secondary" disabled={!isReady} onClick={copyShareLink}>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!isRunnable(settings)}
+            onClick={copyShareLink}
+          >
             {isCopied ? 'Copied' : 'Copy share link'}
           </button>
         </div>
@@ -379,7 +421,8 @@ export const App = () => {
             <Badge level="fail" /> {counts.fail}
             <span className="muted">
               {' '}
-              · {rows.length} tests · click a row for previews and headers
+              · {rows.length} tests · hover a thumbnail to enlarge, click it to open the raw URL,
+              click a row for full headers
             </span>
           </p>
           <div className="scroll">
@@ -391,7 +434,7 @@ export const App = () => {
                   <th>Accept (sim)</th>
                   <th>Origin</th>
                   <th>Proxy</th>
-                  <th>{via === 'server' ? 'Proxy cache' : 'Proxy Cache-Control'}</th>
+                  <th>Proxy cache</th>
                   <th>Result</th>
                 </tr>
               </thead>
@@ -412,8 +455,12 @@ export const App = () => {
                             <code>{test.query || '—'}</code>
                           </td>
                           <td>{test.acceptLabel}</td>
-                          <td>{describe(original)}</td>
-                          <td>{describe(proxied)}</td>
+                          <td>
+                            <Result result={original} />
+                          </td>
+                          <td>
+                            <Result result={proxied} />
+                          </td>
                           <td className="muted">{cacheSummary(proxied)}</td>
                           <td>
                             <Badge level={verdict?.level} />

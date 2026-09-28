@@ -8,17 +8,15 @@ Checks that a reverse proxy in front of `www.datocms-assets.com` serves DatoCMS 
   - **Accept not forwarded:** an AVIF-capable request gets PNG or JPEG from the proxy.
   - **Accept missing from the cache key:** the generic request gets the cached AVIF. The three requests share one fresh URL and run in order, so this case shows up.
 - **Common imgix params:** resizing, cropping, focal points, `fm`, `q`, `auto=compress`, `dpr`, adjustments, text overlays and `dl`. The test passes when the proxy returns byte-identical output.
-- **Relayed headers:** `Content-Disposition`, `Cache-Control` and the CORS and timing headers must match the origin (server mode only).
+- **Your query:** the params in the grid run as their own test under each simulated `Accept` header, in order, so they get the same cache-key check.
+- **Relayed headers:** `Content-Disposition`, `Cache-Control` and the CORS and timing headers must match the origin. A specific `access-control-allow-origin` on a request without `Origin` means the proxy's cache key ignores `Origin`.
 - **Redirects:** it warns when the proxy redirects.
 
-## Fetch modes
+## How requests are made
 
-| Mode | Requests leave from | Visible headers |
-| --- | --- | --- |
-| Checker server | The `/api/inspect` Vercel Function | All of them, including `cf-cache-status`, `x-cache`, `age` |
-| This browser | The viewer's browser, `fetch` with `cache: 'no-store'` | CORS-safelisted headers only (`Content-Type`, `Cache-Control`, …) |
+The `/api/inspect` Vercel Function fetches every URL server-side from `dub1` (Dublin), with no caching, and returns all response headers, including `cf-cache-status`, `x-cache` and `age`. It sends no `Origin` header, so it can't leave a CORS response in the proxy's cache.
 
-Neither mode caches anything. `Accept` values are always simulated: both modes set the header by hand, so no real browser negotiation happens.
+`Accept` values are always simulated: the function sets the header by hand, so no real browser negotiation happens. Thumbnails show the exact bytes the function tested. Clicking one opens the raw URL in a new tab.
 
 ## Sharing a run
 
@@ -29,13 +27,18 @@ The page stores every setting in its query string and runs on load when the link
 | `projectId` | DatoCMS project ID (the first path segment on `www.datocms-assets.com`) |
 | `filename` | Asset filename |
 | `proxyPrefix` | Proxy URL that replaces `https://www.datocms-assets.com/<projectId>/` |
-| `extraParams` | Query string added to every test |
-| `customQueries` | Newline-separated extra test queries |
-| `mode` | `server` (default) or `browser` |
+| `query` | Enabled params from the grid, as a query string |
+| `off` | Disabled params from the grid, as a query string |
+
+The proxy prefix field accepts messy input. It adds a missing `https://`, and when you paste a full proxied URL it moves the filename and query into their own fields.
+
+## imgix parameters
+
+`src/imgix-params.ts` lists imgix's official rendering parameters and aliases, with links to their docs. The grid uses it for the **imgix** pills. `npm run update:imgix-params` regenerates it from [imgix-url-params](https://github.com/imgix/imgix-url-params) (BSD-2-Clause).
 
 ## Hosting
 
-Vercel runs the function in `dub1` (Dublin), set in `vercel.json`, so requests to both hosts leave from the EU.
+`vercel.json` pins the function to `dub1` (Dublin), so requests to both hosts leave from the EU.
 
 ## Development
 
@@ -44,7 +47,7 @@ npm install
 npm run dev
 ```
 
-The Vite dev and preview servers mount the same handler that Vercel serves at `/api/inspect`, so server mode works locally.
+The Vite dev and preview servers mount the same handler that Vercel serves at `/api/inspect`, so checks work locally.
 
 ## `/api/inspect`
 
