@@ -13,15 +13,17 @@ const RELAYED_HEADERS: Record<string, boolean> = {
   'timing-allow-origin': false,
 };
 
-/** Longest shared-cache lifetime that still lets DatoCMS replacements show up within a day. */
-export const MAX_PROXY_TTL_SECONDS = 86_400;
+/**
+ * Longest shared-cache lifetime before visitors wait noticeably for an image an editor
+ * replaced. Deliberately strict: it only produces a warning.
+ */
+export const MAX_PROXY_TTL_SECONDS = 15 * 60;
 
-const DAY_SECONDS = 86_400;
-
-const formatDuration = (seconds: number) =>
-  seconds >= DAY_SECONDS
-    ? `${Math.round(seconds / DAY_SECONDS)} days`
-    : `${Math.round(seconds / 3600)} hours`;
+const formatDuration = (seconds: number) => {
+  if (seconds >= 86_400) return `${Math.round(seconds / 86_400)} days`;
+  if (seconds >= 3600) return `${Math.round(seconds / 3600)} hours`;
+  return `${Math.round(seconds / 60)} minutes`;
+};
 
 /** Shared-cache TTL a response allows: CDN-specific headers first, then s-maxage, then max-age. */
 const sharedTtl = (headers: Record<string, string>) => {
@@ -133,7 +135,7 @@ export const compare = (test: TestCase, original: ProbeResult, proxied: ProbeRes
     if (ttl && ttl.seconds > MAX_PROXY_TTL_SECONDS) {
       flag(
         'warn',
-        `The proxy's ${ttl.header} lets shared caches keep images for ${formatDuration(ttl.seconds)}${age > MAX_PROXY_TTL_SECONDS ? `, and this copy is already ${formatDuration(age)} old` : ''}. DatoCMS purges its own CDN when an editor replaces an image in place, deletes it, or quarantines it. Those purges don't reach the proxy, so it keeps serving the old file. Cap the proxy's TTL at 1 day, or invalidate it from a DatoCMS upload webhook. A CDN max-TTL setting can override this header.`,
+        `The proxy's ${ttl.header} lets shared caches keep images for ${formatDuration(ttl.seconds)}${age > MAX_PROXY_TTL_SECONDS ? `, and this copy is already ${formatDuration(age)} old` : ''}. DatoCMS purges its own CDN when an editor replaces an image in place, deletes it, or quarantines it. Those purges don't reach the proxy, so it keeps serving the old file. Cap the proxy's TTL at 15 minutes, or invalidate it from a DatoCMS upload webhook. A CDN max-TTL setting can override this header.`,
       );
     } else if (ttl) {
       notes.push(`Proxy cache lifetime: ${formatDuration(ttl.seconds)}.`);
