@@ -83,7 +83,8 @@ export const compare = (test: TestCase, original: ProbeResult, proxied: ProbeRes
     if (name === 'access-control-allow-origin' && actual && actual !== '*' && expected === '*') {
       flag(
         'warn',
-        `Proxy sent access-control-allow-origin "${actual}" to a request without an Origin header. Its cache key ignores Origin, so it serves a CORS header cached for another site. Add Origin to the proxy's cache key.`,
+        `Proxy sent access-control-allow-origin "${actual}" to a request without an Origin header. Its cache key ignores Origin, so it serves a CORS header cached for another site. Have the proxy always send ` *
+          `, or add Origin to its cache key.`,
       );
       continue;
     }

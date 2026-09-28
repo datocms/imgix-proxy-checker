@@ -28,865 +28,1068 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-export type ImgixParam = { url: string; description: string };
+export type ImgixParam = { name: string; url: string; description: string };
 
 export const IMGIX_PARAMS: Record<string, ImgixParam> = {
   ar: {
+    name: 'Aspect Ratio',
     url: 'https://docs.imgix.com/apis/rendering/size/aspect-ratio',
     description: 'Specifies an aspect ratio to maintain when resizing and cropping the image',
   },
   auto: {
+    name: 'Automatic',
     url: 'https://docs.imgix.com/apis/rendering/automatic',
     description: 'Applies automatic enhancements to images.',
   },
   bg: {
+    name: 'Background Color',
     url: 'https://docs.imgix.com/apis/rendering/fill/background-color',
     description: 'Colors the background of padded and partially-transparent images.',
   },
   'bg-remove': {
+    name: 'Background Removal',
     url: 'https://docs.imgix.com/apis/rendering/background/background-removal',
     description: 'Removes background from image.',
   },
   'bg-remove-fallback': {
+    name: 'Background Removal Fallback',
     url: 'https://docs.imgix.com/apis/rendering/background/background-removal-fallback',
     description: 'Overrides default fallback behavior for bg-remove failures.',
   },
   'bg-remove-fg-type': {
+    name: 'Background Removal Foreground Type',
     url: 'https://docs.imgix.com/apis/rendering/background/background-removal-foreground-type',
     description: 'Specifies the image foreground type for background removal.',
   },
   'bg-remove-semi-transparency': {
+    name: 'Background Removal Semi Transparency',
     url: 'https://docs.imgix.com/apis/rendering/background/background-removal-semi-transparency',
     description: 'Enables background removal while retaining semi-transparent areas.',
   },
   'bg-remove-transparency-threshold': {
+    name: 'Background Transparency Threshold',
     url: 'https://docs.imgix.com/apis/rendering/background/background-removal-transparency-threshold',
     description:
       'Sets the threshold for background removal based on transparency. Transparency in an image below or equal to the threshold will skip the entire background removal process',
   },
   'bg-replace': {
+    name: 'Background Replacement',
     url: 'https://docs.imgix.com/apis/rendering/background/background-replacement',
     description: 'Replaces background from image using a string based prompt.',
   },
   'bg-replace-fallback': {
+    name: 'Background Replace Fallback',
     url: 'https://docs.imgix.com/apis/rendering/background/background-replacement-fallback',
     description: 'Overrides default fallback behavior for bg-replace failures.',
   },
   'bg-replace-neg-prompt': {
+    name: 'Background Replacement Negative Prompt',
     url: 'https://docs.imgix.com/apis/rendering/background/background-replacement-negative-prompt',
     description: 'Provides a negative text suggestion for background replacement.',
   },
   blend: {
+    name: 'Blend',
     url: 'https://docs.imgix.com/apis/rendering/blending/blend',
     description: 'Specifies the location of the blend image.',
   },
   'blend-align': {
+    name: 'Blend Align',
     url: 'https://docs.imgix.com/apis/rendering/blending/blend-align',
     description: 'Changes the blend alignment relative to the parent image.',
   },
   'blend-alpha': {
+    name: 'Blend Alpha',
     url: 'https://docs.imgix.com/apis/rendering/blending/blend-alpha',
     description: 'Changes the alpha of the blend image.',
   },
   'blend-color': {
+    name: 'Blend Color',
     url: 'https://docs.imgix.com/apis/rendering/blending/blend-color',
     description: 'Specifies a color to use when applying the blend.',
   },
   'blend-crop': {
+    name: 'Blend Crop',
     url: 'https://docs.imgix.com/apis/rendering/blending/blend-crop',
     description: 'Specifies the type of crop for blend images.',
   },
   'blend-fit': {
+    name: 'Blend Fit',
     url: 'https://docs.imgix.com/apis/rendering/blending/blend-fit',
     description: 'Specifies the fit mode for blend images.',
   },
   'blend-h': {
+    name: 'Blend Height',
     url: 'https://docs.imgix.com/apis/rendering/blending/blend-height',
     description: 'Adjusts the height of the blend image.',
   },
   'blend-mode': {
+    name: 'Blend Mode',
     url: 'https://docs.imgix.com/apis/rendering/blending/blend-mode',
     description: 'Sets the blend mode for a blend image.',
   },
   'blend-pad': {
+    name: 'Blend Padding',
     url: 'https://docs.imgix.com/apis/rendering/blending/blend-padding',
     description: 'Applies padding to the blend image.',
   },
   'blend-size': {
+    name: 'Blend Size',
     url: 'https://docs.imgix.com/apis/rendering/blending/blend-size',
     description: 'Adjusts the size of the blend image.',
   },
   'blend-w': {
+    name: 'Blend Width',
     url: 'https://docs.imgix.com/apis/rendering/blending/blend-width',
     description: 'Adjusts the width of the blend image.',
   },
   'blend-x': {
+    name: 'Blend X Position',
     url: 'https://docs.imgix.com/apis/rendering/blending/blend-x-position',
     description: 'Adjusts the x-offset of the blend image relative to its parent.',
   },
   'blend-y': {
+    name: 'Blend Y Position',
     url: 'https://docs.imgix.com/apis/rendering/blending/blend-y-position',
     description: 'Adjusts the y-offset of the blend image relative to its parent.',
   },
   blur: {
+    name: 'Gaussian Blur',
     url: 'https://docs.imgix.com/apis/rendering/stylize/gaussian-blur',
     description: 'Applies a gaussian blur to an image.',
   },
   border: {
+    name: 'Border Size & Color',
     url: 'https://docs.imgix.com/apis/rendering/size',
     description: 'Applies a border to an image.',
   },
   'border-bottom': {
+    name: 'Border Bottom',
     url: 'https://docs.imgix.com/apis/rendering/border-and-padding/border-bottom',
     description: 'Sets bottom border of an image.',
   },
   'border-left': {
+    name: 'Border Left',
     url: 'https://docs.imgix.com/apis/rendering/border-and-padding/border-left',
     description: 'Sets left border of an image.',
   },
   'border-radius': {
+    name: 'Outer Border Radius',
     url: 'https://docs.imgix.com/apis/rendering/border-and-padding/outer-border-radius',
     description: "Sets the outer radius of the image's border in pixels.",
   },
   'border-radius-inner': {
+    name: 'Inner Border Radius',
     url: 'https://docs.imgix.com/apis/rendering/border-and-padding/inner-border-radius',
     description: "Sets the inner radius of the image's border in pixels.",
   },
   'border-right': {
+    name: 'Border Right',
     url: 'https://docs.imgix.com/apis/rendering/border-and-padding/border-right',
     description: 'Sets right border of an image.',
   },
   'border-stroke-color': {
+    name: 'Border Stroke Color',
     url: 'https://docs.imgix.com/apis/rendering/border-and-padding/border-stroke-color',
     description: 'Sets the color of the border stroke around the image.',
   },
   'border-stroke-size': {
+    name: 'Border Stroke Size',
     url: 'https://docs.imgix.com/apis/rendering/border-and-padding/border-stroke-size',
     description: 'Sets the stroke size of the border around the image.',
   },
   'border-top': {
+    name: 'Border Top',
     url: 'https://docs.imgix.com/apis/rendering/border-and-padding/border-top',
     description: 'Sets top border of an image.',
   },
   bri: {
+    name: 'Brightness',
     url: 'https://docs.imgix.com/apis/rendering/adjustment/brightness',
     description: 'Adjusts the brightness of the source image.',
   },
   ch: {
+    name: 'Client Hints',
     url: 'https://docs.imgix.com/apis/rendering/format/client-hints',
     description: 'Sets one or more Client-Hints headers',
   },
   chromasub: {
+    name: 'Chroma Subsampling',
     url: 'https://docs.imgix.com/apis/rendering/format/chroma-subsampling',
     description: 'Specifies the output chroma subsampling rate.',
   },
   colorquant: {
+    name: 'Color Quantization',
     url: 'https://docs.imgix.com/apis/rendering/format/color-quantization',
     description: 'Limits the number of unique colors in an image.',
   },
   colors: {
+    name: 'Palette Color Count',
     url: 'https://docs.imgix.com/apis/rendering/color-palette/palette-color-count',
     description: 'Specifies how many colors to include in a palette-extraction response.',
   },
   con: {
+    name: 'Contrast',
     url: 'https://docs.imgix.com/apis/rendering/adjustment/contrast',
     description: 'Adjusts the contrast of the source image.',
   },
   'corner-radius': {
+    name: 'Mask Corner Radius',
     url: 'https://docs.imgix.com/apis/rendering/mask-image/mask-corner-radius',
     description: 'Specifies the radius value for a rounded corner mask.',
   },
   crop: {
+    name: 'Crop Mode',
     url: 'https://docs.imgix.com/apis/rendering/size/crop-mode',
     description: 'Specifies how to crop an image.',
   },
   cs: {
+    name: 'Color Space',
     url: 'https://docs.imgix.com/apis/rendering/format/color-space',
     description: 'Specifies the color space of the output image.',
   },
   dl: {
+    name: 'Download',
     url: 'https://docs.imgix.com/apis/rendering/format/download',
     description: 'Forces a URL to use send-file in its response.',
   },
   dpi: {
+    name: 'Dots Per Inch',
     url: 'https://docs.imgix.com/apis/rendering/format/dots-per-inch',
     description: 'Sets the DPI value in the EXIF header.',
   },
   dpr: {
+    name: 'Device Pixel Ratio',
     url: 'https://docs.imgix.com/apis/rendering/device-pixel-ratio',
     description: 'Adjusts the device-pixel ratio of the output image.',
   },
   duotone: {
+    name: 'Duotone',
     url: 'https://docs.imgix.com/apis/rendering/stylize/duotone',
     description: 'Applies a duotone effect to the source image.',
   },
   'duotone-alpha': {
+    name: 'Duotone Alpha',
     url: 'https://docs.imgix.com/apis/rendering/stylize/duotone-alpha',
     description: 'Changes the alpha of the duotone effect atop the source image.',
   },
   exp: {
+    name: 'Exposure',
     url: 'https://docs.imgix.com/apis/rendering/adjustment/exposure',
     description: 'Adjusts the exposure of the output image.',
   },
   expires: {
+    name: 'URL Expiration Timestamp',
     url: 'https://docs.imgix.com/apis/rendering/expiration',
     description:
       'A Unix timestamp specifying a UTC time. Requests made to this URL after that time will output a 404 status code.',
   },
   'face-blur': {
+    name: 'Face Blur',
     url: 'https://docs.imgix.com/apis/rendering/face-detection/face-blur',
     description: 'Specifies the amount of blur to apply to detected faces. Defaults to 0.',
   },
   'face-pixel': {
+    name: 'Face Pixelation',
     url: 'https://docs.imgix.com/apis/rendering/face-detection/face-pixelation',
     description: 'Specifies the pixelation amount of the face.',
   },
   faceindex: {
+    name: 'Face Index',
     url: 'https://docs.imgix.com/apis/rendering/face-detection/face-index',
     description: 'Selects a face to crop to.',
   },
   facepad: {
+    name: 'Face Padding',
     url: 'https://docs.imgix.com/apis/rendering/face-detection/face-padding',
     description: 'Adjusts padding around a selected face.',
   },
   faces: {
+    name: 'Json Face Data',
     url: 'https://docs.imgix.com/apis/rendering/face-detection/json-face-data',
     description:
       'Specifies that face data should be included in output when combined with `fm=json`.',
   },
   fill: {
+    name: 'Fill Mode',
     url: 'https://docs.imgix.com/apis/rendering/fill/fill-mode',
     description: 'Determines how to fill in additional space created by the fit setting',
   },
   'fill-color': {
+    name: 'Fill Color',
     url: 'https://docs.imgix.com/apis/rendering/fill/fill-color',
     description: 'Sets the fill color for images with additional space created by the fit setting',
   },
   'fill-gen-fallback': {
+    name: 'Fill Generative Fallback',
     url: 'https://docs.imgix.com/apis/rendering/fill/fill-generative-fallback',
     description: 'Sets the fallback behavior for generative fill.',
   },
   'fill-gen-neg-prompt': {
+    name: 'Fill Generative Negative Prompt',
     url: 'https://docs.imgix.com/apis/rendering/fill/fill-generative-negative-prompt',
     description:
       'Provides a negative text suggestion to the generative fill parameter. Used to reduce the probability of a subject, detail, or object appearing in generative output.',
   },
   'fill-gen-pos': {
+    name: 'Fill Generative Position',
     url: 'https://docs.imgix.com/apis/rendering/fill/fill-generative-position',
     description: 'Sets the position of the Origin Image in relation to the generative fill.',
   },
   'fill-gen-prompt': {
+    name: 'Fill Generative Prompt',
     url: 'https://docs.imgix.com/apis/rendering/fill/fill-generative-prompt',
     description: 'Provides a text suggestion to the generative fill parameter.',
   },
   'fill-gen-seed': {
+    name: 'Fill Generative Seed',
     url: 'https://docs.imgix.com/apis/rendering/fill/fill-generative-seed',
     description:
       'Sets the generative seed value. Used to generate similar outputs from different prompts.',
   },
   'fill-gradient-cs': {
+    name: 'Fill Gradient Color Space',
     url: 'https://docs.imgix.com/apis/rendering/fill/fill-gradient-color-space',
     description:
       'Defines the color space as linear, sRGB, Oklab, HSL, or LCH for gradient color interpolation',
   },
   'fill-gradient-linear': {
+    name: 'Fill Gradient Linear',
     url: 'https://docs.imgix.com/apis/rendering/fill/fill-gradient-linear',
     description:
       'Blends a gradient between two colors, {color1} and {color2}, along a straight path',
   },
   'fill-gradient-linear-direction': {
+    name: 'Fill Gradient Linear Direction',
     url: 'https://docs.imgix.com/apis/rendering/fill/fill-gradient-linear-direction',
     description:
       "The fill-gradient-linear-direction specifies the gradient's direction, flowing towards the bottom, top, right, or left",
   },
   'fill-gradient-radial': {
+    name: 'Fill Gradient Radial',
     url: 'https://docs.imgix.com/apis/rendering/fill/fill-gradient-radial',
     description:
       'The fill-gradient-radial parameter creates a circular gradient transitioning from a central color (Color1) to an outer color (Color2)',
   },
   'fill-gradient-radial-radius': {
+    name: 'Fill Gradient Radial Radius',
     url: 'https://docs.imgix.com/apis/rendering/fill/fill-gradient-radial-radius',
     description:
       "Parameter defines the radial gradient's radius as pixels or a percentage (0.0-1.0) of the image's smallest dimension",
   },
   'fill-gradient-radial-x': {
+    name: 'Fill Gradient Radial X',
     url: 'https://docs.imgix.com/apis/rendering/fill/fill-gradient-radial-x',
     description:
       "Specifies the location of the radial gradient's center along the x-axis, using either a pixel value or a floating point percentage (ranging from 0.0 to 1.0) of the image's width",
   },
   'fill-gradient-radial-y': {
+    name: 'Fill Gradient Radial Y',
     url: 'https://docs.imgix.com/apis/rendering/fill/fill-gradient-radial-y',
     description:
       "Parameter sets the radial gradient's center on the y-axis, using pixels or a 0.0 to 1.0 percentage of the image's height",
   },
   'fill-gradient-type': {
+    name: 'Fill Gradient Type',
     url: 'https://docs.imgix.com/apis/rendering/fill/fill-gradient-type',
     description: 'Specifies if a gradient is radial (circular) or linear (straight)',
   },
   fit: {
+    name: 'Resize Fit Mode',
     url: 'https://docs.imgix.com/apis/rendering/size/resize-fit-mode',
     description: 'Specifies how to map the source image to the output image dimensions.',
   },
   flip: {
+    name: 'Flip Axis',
     url: 'https://docs.imgix.com/apis/rendering/rotation/flip-axis',
     description: 'Flips an image on a specified axis.',
   },
   fm: {
+    name: 'Output Format',
     url: 'https://docs.imgix.com/apis/rendering/format/output-format',
     description: 'Changes the format of the output image.',
   },
   'fp-debug': {
+    name: 'Focal Point Debug',
     url: 'https://docs.imgix.com/apis/rendering/focal-point-crop/focal-point-debug',
     description: 'Displays crosshairs identifying the location of the set focal point',
   },
   'fp-x': {
+    name: 'Focal Point X Position',
     url: 'https://docs.imgix.com/apis/rendering/focal-point-crop/focal-point-x-position',
     description: 'Sets the relative horizontal value for the focal point of an image',
   },
   'fp-y': {
+    name: 'Focal Point Y Position',
     url: 'https://docs.imgix.com/apis/rendering/focal-point-crop/focal-point-y-position',
     description: 'Sets the relative vertical value for the focal point of an image',
   },
   'fp-z': {
+    name: 'Focal Point Zoom',
     url: 'https://docs.imgix.com/apis/rendering/focal-point-crop/focal-point-zoom',
     description: 'Sets the relative zoom value for the focal point of an image',
   },
   fps: {
+    name: 'Frames Per Second',
     url: 'https://docs.imgix.com/apis/rendering/animation/frames-per-second',
     description: 'Specifies the framerate of the generated image.',
   },
   frame: {
+    name: 'Frame Selection',
     url: 'https://docs.imgix.com/apis/rendering/animation/frame-selection',
     description: 'Specifies the frame of an animated image to use.',
   },
   gam: {
+    name: 'Gamma',
     url: 'https://docs.imgix.com/apis/rendering/adjustment/gamma',
     description: 'Adjusts the gamma of the source image.',
   },
   'grid-colors': {
+    name: 'Grid Colors',
     url: 'https://docs.imgix.com/apis/rendering/fill/grid-colors',
     description: 'Sets grid colors for the transparency checkerboard grid.',
   },
   'grid-size': {
+    name: 'Grid Size',
     url: 'https://docs.imgix.com/apis/rendering/fill/grid-size',
     description: 'Sets grid size for the transparency checkerboard grid.',
   },
   h: {
+    name: 'Image Height',
     url: 'https://docs.imgix.com/apis/rendering/size/image-height',
     description: 'Adjusts the height of the output image.',
   },
   high: {
+    name: 'Highlight',
     url: 'https://docs.imgix.com/apis/rendering/adjustment/highlight',
     description: 'Adjusts the highlights of the source image.',
   },
   htn: {
+    name: 'Halftone',
     url: 'https://docs.imgix.com/apis/rendering/stylize/halftone',
     description: 'Applies a half-tone effect to the source image.',
   },
   hue: {
+    name: 'Hue Shift',
     url: 'https://docs.imgix.com/apis/rendering/adjustment/hue-shift',
     description: 'Adjusts the hue of the source image.',
   },
   interval: {
+    name: 'Frame Interval',
     url: 'https://docs.imgix.com/apis/rendering/animation/frame-interval',
     description: 'Displays every Nth frame starting with the first frame.',
   },
   invert: {
+    name: 'Invert',
     url: 'https://docs.imgix.com/apis/rendering/adjustment/invert',
     description: 'Inverts the colors on the source image.',
   },
   iptc: {
+    name: 'IPTC Passthrough',
     url: 'https://docs.imgix.com/apis/rendering/format/iptc-passthrough',
     description: 'Determine if IPTC data should be passed for JPEG images.',
   },
   'jpg-progressive': {
+    name: 'Jpg Progressive',
     url: 'https://docs.imgix.com/apis/rendering/format/jpg-progressive',
     description: 'Specifies whether or not a jpg/jpeg uses progressive (true) or baseline (false)',
   },
   loop: {
+    name: 'Animation Loop Count',
     url: 'https://docs.imgix.com/apis/rendering/animation',
     description:
       'Specifies the number of times an animated image should repeat. A value of 0 means infinite looping.',
   },
   lossless: {
+    name: 'Lossless Compression',
     url: 'https://docs.imgix.com/apis/rendering/format/lossless-compression',
     description: 'Specifies that the output image should be a lossless variant.',
   },
   'lp-blur': {
+    name: 'License Plate Blur',
     url: 'https://docs.imgix.com/apis/rendering/license-plate-detection/license-plate-blur',
     description: 'Specifies the amount of blur to apply to detected license plates. Defaults to 0.',
   },
   mark: {
+    name: 'Watermark Image Url',
     url: 'https://docs.imgix.com/apis/rendering/watermark/watermark-image-url',
     description: 'Specifies the location of the watermark image.',
   },
   'mark-align': {
+    name: 'Watermark Alignment Mode',
     url: 'https://docs.imgix.com/apis/rendering/watermark/watermark-alignment-mode',
     description: 'Changes the watermark alignment relative to the parent image.',
   },
   'mark-alpha': {
+    name: 'Watermark Alpha',
     url: 'https://docs.imgix.com/apis/rendering/watermark/watermark-alpha',
     description: 'Changes the alpha of the watermark image.',
   },
   'mark-base': {
+    name: 'Watermark Base Url',
     url: 'https://docs.imgix.com/apis/rendering/watermark/watermark-base-url',
     description: 'Changes base URL of the watermark image.',
   },
   'mark-fit': {
+    name: 'Watermark Fit Mode',
     url: 'https://docs.imgix.com/apis/rendering/watermark/watermark-fit-mode',
     description: 'Specifies the fit mode for watermark images.',
   },
   'mark-h': {
+    name: 'Watermark Height',
     url: 'https://docs.imgix.com/apis/rendering/watermark/watermark-height',
     description: 'Adjusts the height of the watermark image.',
   },
   'mark-if-min-height': {
+    name: 'Watermark If Minimum Height',
     url: 'https://docs.imgix.com/apis/rendering/watermark/watermark-if-minimum-height',
     description:
       'Displays the watermark if rendered base image pixel height is equal to or larger than the supplied value',
   },
   'mark-if-min-width': {
+    name: 'Watermark If Minimum Width',
     url: 'https://docs.imgix.com/apis/rendering/watermark/watermark-if-minimum-width',
     description:
       'Displays the watermark if rendered base image pixel width is equal to or larger than the supplied value',
   },
   'mark-pad': {
+    name: 'Watermark Padding',
     url: 'https://docs.imgix.com/apis/rendering/watermark/watermark-padding',
     description: 'Applies padding to the watermark image.',
   },
   'mark-rot': {
+    name: 'Watermark Rotation',
     url: 'https://docs.imgix.com/apis/rendering/watermark/watermark-rotation',
     description: 'Rotates a watermark or tiled watermarks by a specified number of degrees.',
   },
   'mark-scale': {
+    name: 'Watermark Scale',
     url: 'https://docs.imgix.com/apis/rendering/watermark/watermark-scale',
     description: 'Adjusts the scale of the watermark image.',
   },
   'mark-tile': {
+    name: 'Watermark Tile',
     url: 'https://docs.imgix.com/apis/rendering/watermark/watermark-tile',
     description: 'Adds tiled watermark.',
   },
   'mark-w': {
+    name: 'Watermark Width',
     url: 'https://docs.imgix.com/apis/rendering/watermark/watermark-width',
     description: 'Adjusts the width of the watermark image.',
   },
   'mark-x': {
+    name: 'Watermark X Position',
     url: 'https://docs.imgix.com/apis/rendering/watermark/watermark-x-position',
     description: 'Adjusts the x-offset of the watermark image relative to its parent.',
   },
   'mark-y': {
+    name: 'Watermark Y Position',
     url: 'https://docs.imgix.com/apis/rendering/watermark/watermark-y-position',
     description: 'Adjusts the y-offset of the watermark image relative to its parent.',
   },
   mask: {
+    name: 'Mask Type',
     url: 'https://docs.imgix.com/apis/rendering/mask-image/mask-type',
     description: 'Defines the type of mask and specifies the URL if that type is selected.',
   },
   'mask-bg': {
+    name: 'Mask Background Color',
     url: 'https://docs.imgix.com/apis/rendering/mask-image/mask-background-color',
     description: 'Colors the background of the transparent mask area of images',
   },
   'max-h': {
+    name: 'Maximum Height',
     url: 'https://docs.imgix.com/apis/rendering/size/maximum-height',
     description: 'Specifies the maximum height of the output image in pixels.',
   },
   'max-w': {
+    name: 'Maximum Width',
     url: 'https://docs.imgix.com/apis/rendering/size/maximum-width',
     description: 'Specifies the maximum width of the output image in pixels.',
   },
   'min-h': {
+    name: 'Minimum Height',
     url: 'https://docs.imgix.com/apis/rendering/size/minimum-height',
     description: 'Specifies the minimum height of the output image in pixels.',
   },
   'min-w': {
+    name: 'Minimum Width',
     url: 'https://docs.imgix.com/apis/rendering/size/minimum-width',
     description: 'Specifies the minimum width of the output image in pixels.',
   },
   monochrome: {
+    name: 'Monochrome',
     url: 'https://docs.imgix.com/apis/rendering/stylize/monochrome',
     description: 'Applies a monochrome effect to the source image.',
   },
   nr: {
+    name: 'Noise Reduction Bound',
     url: 'https://docs.imgix.com/apis/rendering/noise-reduction/noise-reduction-bound',
     description: 'Reduces the noise in an image.',
   },
   nrs: {
+    name: 'Noise Reduction Sharpen',
     url: 'https://docs.imgix.com/apis/rendering/noise-reduction/noise-reduction-sharpen',
     description: 'Provides a threshold by which to sharpen an image.',
   },
   'object-removal-negative-prompt': {
+    name: 'Object Removal Negative Prompt',
     url: 'https://docs.imgix.com/apis/rendering/object-manipulation/object-removal-negative-prompt',
     description:
       'Provides a negative text suggestion to object-removal-prompt. Used to reduce the probability of a subject, detail, or object appearing in generative output.',
   },
   'object-removal-prompt': {
+    name: 'Object Removal Prompt',
     url: 'https://docs.imgix.com/apis/rendering/object-manipulation/object-removal-prompt',
     description: 'Suggest auto generative fill for the object-removal-rect parameter',
   },
   'object-removal-rect': {
+    name: 'Object Removal',
     url: 'https://docs.imgix.com/apis/rendering/object-manipulation/object-removal',
     description: 'Using a specified rectangle, an object is removed from the image',
   },
   'object-removal-seed': {
+    name: 'Object Removal Seed',
     url: 'https://docs.imgix.com/apis/rendering/object-manipulation/object-removal-seed',
     description:
       'Sets the generative seed value for object-removal. Used to generate new outputs from the same prompt',
   },
   orient: {
+    name: 'Orientation',
     url: 'https://docs.imgix.com/apis/rendering/rotation/orientation',
     description: 'Changes the image orientation.',
   },
   pad: {
+    name: 'Padding',
     url: 'https://docs.imgix.com/apis/rendering/border-and-padding/padding',
     description: 'Pads an image.',
   },
   'pad-bottom': {
+    name: 'Padding Bottom',
     url: 'https://docs.imgix.com/apis/rendering/border-and-padding/padding-bottom',
     description: 'Sets bottom padding of an image.',
   },
   'pad-left': {
+    name: 'Padding Left',
     url: 'https://docs.imgix.com/apis/rendering/border-and-padding/padding-left',
     description: 'Sets left padding of an image.',
   },
   'pad-right': {
+    name: 'Padding Right',
     url: 'https://docs.imgix.com/apis/rendering/border-and-padding/padding-right',
     description: 'Sets right padding of an image.',
   },
   'pad-top': {
+    name: 'Padding Top',
     url: 'https://docs.imgix.com/apis/rendering/border-and-padding/padding-top',
     description: 'Sets top padding of an image.',
   },
   page: {
+    name: 'Pdf Page Number',
     url: 'https://docs.imgix.com/apis/rendering/pdf/pdf-page-number',
     description: 'Selects a page from a PDF for display.',
   },
   palette: {
+    name: 'Color Palette Extraction',
     url: 'https://docs.imgix.com/apis/rendering/color-palette/color-palette-extraction',
     description: 'Specifies an output format for palette-extraction.',
   },
   'pdf-annotation': {
+    name: 'Pdf Annotation',
     url: 'https://docs.imgix.com/apis/rendering/pdf/pdf-annotation',
     description: 'Enables or disables PDF annotation.',
   },
   prefix: {
+    name: 'Css Prefix',
     url: 'https://docs.imgix.com/apis/rendering/color-palette/css-prefix',
     description: 'Specifies a CSS prefix for all classes in palette-extraction.',
   },
   px: {
+    name: 'Pixellate',
     url: 'https://docs.imgix.com/apis/rendering/stylize/pixellate',
     description: 'Applies a pixelation effect to an image.',
   },
   q: {
+    name: 'Output Quality',
     url: 'https://docs.imgix.com/apis/rendering/format/output-quality',
     description: 'Adjusts the quality of an output image.',
   },
   'rasterize-bypass': {
+    name: 'Rasterize Bypass',
     url: 'https://docs.imgix.com/apis/rendering/format/rasterize-bypass',
     description:
       'Bypasses all rendering parameters (including default parameters) and serves the original image. Works for svg+xml,x-eps,pdf, and vnd.adobe.illustrator.',
   },
   rect: {
+    name: 'Source Rectangle Region',
     url: 'https://docs.imgix.com/apis/rendering/size/source-rectangle-region',
     description: 'Crops an image to a specified rectangle.',
   },
   reverse: {
+    name: 'Reverse',
     url: 'https://docs.imgix.com/apis/rendering/animation/reverse',
     description: 'Reverses the frame order on the source animation.',
   },
   rot: {
+    name: 'Rotation',
     url: 'https://docs.imgix.com/apis/rendering/rotation/rotation',
     description: 'Rotates an image by a specified number of degrees.',
   },
   'rot-type': {
+    name: 'Rotation Type',
     url: 'https://docs.imgix.com/apis/rendering/rotation/rotation-type',
     description: 'Changes the rotation type.',
   },
   sat: {
+    name: 'Saturation',
     url: 'https://docs.imgix.com/apis/rendering/adjustment/saturation',
     description: 'Adjusts the saturation of an image.',
   },
   sepia: {
+    name: 'Sepia Tone',
     url: 'https://docs.imgix.com/apis/rendering/stylize/sepia-tone',
     description: 'Applies a sepia effect to an image.',
   },
   shad: {
+    name: 'Shadow',
     url: 'https://docs.imgix.com/apis/rendering/adjustment/shadow',
     description: 'Adjusts the highlights of the source image.',
   },
   sharp: {
+    name: 'Sharpen',
     url: 'https://docs.imgix.com/apis/rendering/adjustment/sharpen',
     description: 'Adjusts the sharpness of the source image.',
   },
   skip: {
+    name: 'Frame Skip',
     url: 'https://docs.imgix.com/apis/rendering/animation/frame-skip',
     description: 'Skips every Nth frame starting with the first frame.',
   },
   'svg-sanitize': {
+    name: 'Sanitize Svg',
     url: 'https://docs.imgix.com/apis/rendering/format/sanitize-svg',
     description: 'Specifies whether to sanitize an SVG.',
   },
   transparency: {
+    name: 'Transparency',
     url: 'https://docs.imgix.com/apis/rendering/fill/transparency',
     description: 'Adds checkerboard behind images which support transparency.',
   },
   trim: {
+    name: 'Trim Image',
     url: 'https://docs.imgix.com/apis/rendering/trim/trim-image',
     description: 'Trims the source image.',
   },
   'trim-alpha': {
+    name: 'Trim Alpha',
     url: 'https://docs.imgix.com/apis/rendering/trim/trim-alpha',
     description: 'Specifies a trim alpha on a trim operation.',
   },
   'trim-color': {
+    name: 'Trim Color',
     url: 'https://docs.imgix.com/apis/rendering/trim/trim-color',
     description: 'Specifies a trim color on a trim operation.',
   },
   'trim-md': {
+    name: 'Trim Mean Difference',
     url: 'https://docs.imgix.com/apis/rendering/trim/trim-mean-difference',
     description: 'Specifies the mean difference on a trim operation.',
   },
   'trim-pad': {
+    name: 'Trim Padding',
     url: 'https://docs.imgix.com/apis/rendering/trim/trim-padding',
     description: 'Pads the area of the source image before trimming.',
   },
   'trim-sd': {
+    name: 'Trim Standard Deviation',
     url: 'https://docs.imgix.com/apis/rendering/trim/trim-standard-deviation',
     description: 'Specifies the standard deviation on a trim operation.',
   },
   'trim-tol': {
+    name: 'Trim Tolerance',
     url: 'https://docs.imgix.com/apis/rendering/trim/trim-tolerance',
     description: 'Specifies the tolerance on a trim operation.',
   },
   txt: {
+    name: 'Text String',
     url: 'https://docs.imgix.com/apis/rendering/text/text-string',
     description: 'Sets the text string to render.',
   },
   'txt-align': {
+    name: 'Text Align',
     url: 'https://docs.imgix.com/apis/rendering/text/text-align',
     description:
       'Sets the vertical and horizontal alignment of rendered text relative to the base image.',
   },
   'txt-clip': {
+    name: 'Text Clipping Mode',
     url: 'https://docs.imgix.com/apis/rendering/text/text-clipping-mode',
     description: 'Sets the clipping properties of rendered text.',
   },
   'txt-color': {
+    name: 'Text Color',
     url: 'https://docs.imgix.com/apis/rendering/text/text-color',
     description: 'Specifies the color of rendered text.',
   },
   'txt-fit': {
+    name: 'Text Fit Mode',
     url: 'https://docs.imgix.com/apis/rendering/text/text-fit-mode',
     description: 'Specifies the fit approach for rendered text.',
   },
   'txt-font': {
+    name: 'Text Font',
     url: 'https://docs.imgix.com/apis/rendering/text/text-font',
     description: 'Selects a font for rendered text.',
   },
   'txt-lead': {
+    name: 'Text Leading',
     url: 'https://docs.imgix.com/apis/rendering/typesetting-endpoint/text-leading',
     description:
       'Sets the leading (line spacing) for rendered text. Only works on the multi-line text endpoint.',
   },
   'txt-line': {
+    name: 'Text Outline',
     url: 'https://docs.imgix.com/apis/rendering/text/text-outline',
     description: 'Outlines the rendered text with a specified color.',
   },
   'txt-line-color': {
+    name: 'Text Outline Color',
     url: 'https://docs.imgix.com/apis/rendering/text/text-outline-color',
     description: 'Specifies a text outline color.',
   },
   'txt-pad': {
+    name: 'Text Padding',
     url: 'https://docs.imgix.com/apis/rendering/text/text-padding',
     description:
       'Specifies the padding (in device-independent pixels) between a textbox and the edges of the base image.',
   },
   'txt-shad': {
+    name: 'Text Shadow',
     url: 'https://docs.imgix.com/apis/rendering/text/text-shadow',
     description: 'Applies a shadow to rendered text.',
   },
   'txt-size': {
+    name: 'Text Font Size',
     url: 'https://docs.imgix.com/apis/rendering/text/text-font-size',
     description: 'Sets the font size of rendered text.',
   },
   'txt-track': {
+    name: 'Text Tracking',
     url: 'https://docs.imgix.com/apis/rendering/typesetting-endpoint/text-tracking',
     description:
       'Sets the tracking (letter spacing) for rendered text. Only works on the multi-line text endpoint.',
   },
   'txt-width': {
+    name: 'Text Width',
     url: 'https://docs.imgix.com/apis/rendering/text/text-width',
     description: 'Sets the width of rendered text.',
   },
   'txt-x': {
+    name: 'Text X Position',
     url: 'https://docs.imgix.com/apis/rendering/text/text-x-position',
     description:
       'Sets the horizontal (x) position of the text in pixels relative to the left edge of the base image.',
   },
   'txt-y': {
+    name: 'Text Y Position',
     url: 'https://docs.imgix.com/apis/rendering/text/text-y-position',
     description:
       'Sets the vertical (y) position of the text in pixels relative to the top edge of the base image.',
   },
   upscale: {
+    name: 'Super Resolution',
     url: 'https://docs.imgix.com/apis/rendering/super-resolution',
     description: 'Uses generative AI fill to upscale low resolution images.',
   },
   'upscale-fallback': {
+    name: 'Super Resolution Fallback',
     url: 'https://docs.imgix.com/apis/rendering/super-resolution',
     description: 'Overrides default fallback behavior for super resolution failures',
   },
   usm: {
+    name: 'Unsharp Mask',
     url: 'https://docs.imgix.com/apis/rendering/adjustment/unsharp-mask',
     description: 'Sharpens the source image using an unsharp mask.',
   },
   usmrad: {
+    name: 'Unsharp Mask Radius',
     url: 'https://docs.imgix.com/apis/rendering/adjustment/unsharp-mask-radius',
     description: 'Specifies the radius for an unsharp mask operation.',
   },
   vib: {
+    name: 'Vibrance',
     url: 'https://docs.imgix.com/apis/rendering/adjustment/vibrance',
     description: 'Adjusts the vibrance of an image.',
   },
   'video-bitrate': {
+    name: 'Video Bitrate',
     url: 'https://docs.imgix.com/en-US/apis/video/encoding/video-bitrate',
     description: 'Specifies the bitrate for a video to use.',
   },
   'video-clip-duration': {
+    name: 'Video Clip Duration',
     url: 'https://docs.imgix.com/en-US/apis/video/clip/video-clip-duration',
     description: 'Specifies the duration for a video clip.',
   },
   'video-clip-end': {
+    name: 'Video Clip',
     url: 'https://docs.imgix.com/en-US/apis/video/clip/video-clip-end',
     description: 'Specifies the end time for a video clip.',
   },
   'video-clip-start': {
+    name: 'Video Clip',
     url: 'https://docs.imgix.com/en-US/apis/video/clip/video-clip-start',
     description: 'Specifies the start time for a video clip.',
   },
   'video-codec': {
+    name: 'Video Codec',
     url: 'https://docs.imgix.com/en-US/apis/video/encoding/video-codec',
     description: 'Specifies the video codec to use, av1, h264, or h265.',
   },
   'video-generate-subtitles': {
+    name: 'Video Generate Subtitles',
     url: 'https://docs.imgix.com/en-US/apis/video/subtitles/video-generate-subtitles',
     description:
       'Generates an AI-transcribed subtitle track using Whisper and injects it into the output video or streaming manifest.',
   },
   'video-renditions': {
+    name: 'Video Renditions',
     url: 'https://docs.imgix.com/en-US/apis/video/format/video-format',
     description:
       'Overrides the default ABR ladder with a comma-separated list of height:bitrate pairs (e.g. 1080:6m,720:3m).',
   },
   'video-spritesheet-columns': {
+    name: 'Video Spritesheet Columns',
     url: 'https://docs.imgix.com/en-US/apis/video/spritesheets/video-spritesheet-columns',
     description:
       'Number of columns in the spritesheet grid. Defaults to "auto", which lets Imgix choose a layout based on the total frame count.',
   },
   'video-spritesheet-format': {
+    name: 'Video Spritesheet Format',
     url: 'https://docs.imgix.com/en-US/apis/video/spritesheets/video-spritesheet-format',
     description:
       'Output image format for the spritesheet. Choose webp or avif for better compression at the cost of broader browser support requirements.',
   },
   'video-spritesheet-h': {
+    name: 'Video Spritesheet Frame Height',
     url: 'https://docs.imgix.com/en-US/apis/video/spritesheets/video-spritesheet-h',
     description:
       'Height in pixels of each individual frame tile in the spritesheet. Defaults to "auto", scaling proportionally from video-spritesheet-w.',
   },
   'video-spritesheet-interval': {
+    name: 'Video Spritesheet Interval',
     url: 'https://docs.imgix.com/en-US/apis/video/spritesheets/video-spritesheet-interval',
     description:
       'Controls how frequently frames are sampled for the spritesheet. Set to "auto" to let Imgix choose a density based on video duration, or provide an integer number of seconds between frames.',
   },
   'video-spritesheet-smart-crop': {
+    name: 'Video Spritesheet Smart Crop',
     url: 'https://docs.imgix.com/en-US/apis/video/spritesheets/video-spritesheet-smart-crop',
     description:
       'When true, applies content-aware cropping to each spritesheet frame tile rather than a simple center crop, keeping the most visually relevant area in frame.',
   },
   'video-spritesheet-w': {
+    name: 'Video Spritesheet Frame Width',
     url: 'https://docs.imgix.com/en-US/apis/video/spritesheets/video-spritesheet-w',
     description:
       "Width in pixels of each individual frame tile in the spritesheet. Height is derived automatically from the video's aspect ratio unless video-spritesheet-h is also set.",
   },
   'video-subtitle-translations': {
+    name: 'Video Subtitle Translations',
     url: 'https://docs.imgix.com/en-US/apis/video/subtitles/video-subtitle-translations',
     description:
       'Comma-separated list of ISO language codes to translate subtitles into using MADLAD-400. A separate subtitle track is generated for each language.',
   },
   'video-thumbnail': {
+    name: 'Video Thumbnail',
     url: 'https://docs.imgix.com/en-US/apis/video/format/video-thumbnail',
     description: 'Outputs a thumbnail from a video file.',
   },
   'video-wave': {
+    name: 'Video Waveform',
     url: 'https://docs.imgix.com/en-US/apis/video/audio-waveforms',
     description:
       'Overlays an audio waveform visualization onto the video or static image output. Silently ignored if the source has no audio track.',
   },
   'video-wave-align': {
+    name: 'Video Waveform Alignment',
     url: 'https://docs.imgix.com/en-US/apis/video/audio-waveforms/video-wave-align',
     description:
       'Alignment of the waveform box on the canvas. Comma-separated vertical and horizontal values (e.g. bottom,center or top,right). Overridden by video-wave-x/y.',
   },
   'video-wave-amplitude': {
+    name: 'Video Waveform Amplitude',
     url: 'https://docs.imgix.com/en-US/apis/video/audio-waveforms/video-wave-amplitude',
     description:
       "Boosts the waveform's visual sensitivity without affecting the actual audio track. Useful for quiet source audio that produces a flat visualization.",
   },
   'video-wave-bg-color': {
+    name: 'Video Waveform Background Color',
     url: 'https://docs.imgix.com/en-US/apis/video/audio-waveforms/video-wave-bg-color',
     description:
       'The background color of the waveform bounding box. Accepts 6-digit RGB or 8-digit RGBA hex values. Defaults to transparent.',
   },
   'video-wave-color': {
+    name: 'Video Waveform Color',
     url: 'https://docs.imgix.com/en-US/apis/video/audio-waveforms/video-wave-color',
     description:
       'The color of the waveform. Accepts 6-digit RGB or 8-digit RGBA hex values. Pipe-separate multiple values to color individual audio channels.',
   },
   'video-wave-h': {
+    name: 'Video Waveform Height',
     url: 'https://docs.imgix.com/en-US/apis/video/audio-waveforms/video-wave-h',
     description:
       'Height of the waveform bounding box. Values <= 1.0 are a percentage of the canvas; values > 1.0 are absolute pixels. Default is 0.2 (20% height).',
   },
   'video-wave-mode': {
+    name: 'Video Waveform Mode',
     url: 'https://docs.imgix.com/en-US/apis/video/audio-waveforms/video-wave-mode',
     description:
       'The drawing style of the waveform. cline (centered lines), line (bottom-aligned), p2p (point-to-point), or point (disconnected dots).',
   },
   'video-wave-pad': {
+    name: 'Video Waveform Padding',
     url: 'https://docs.imgix.com/en-US/apis/video/audio-waveforms/video-wave-pad',
     description:
       'Pixels of padding between the waveform bounding box and the edge of the video frame.',
   },
   'video-wave-scale': {
+    name: 'Video Waveform Amplitude Scale',
     url: 'https://docs.imgix.com/en-US/apis/video/audio-waveforms/video-wave-scale',
     description:
       'Defines how the waveform amplitude is scaled. Options: sqrt (default), cbrt (cube root), log (logarithmic), or lin (linear).',
   },
   'video-wave-split': {
+    name: 'Video Waveform Split Channels',
     url: 'https://docs.imgix.com/en-US/apis/video/audio-waveforms/video-wave-split',
     description:
       'Visualizes audio channels separately (e.g. left and right stereo channels stacked vertically) instead of downmixing to a single mono waveform.',
   },
   'video-wave-thickness': {
+    name: 'Video Waveform Thickness',
     url: 'https://docs.imgix.com/en-US/apis/video/audio-waveforms/video-wave-thickness',
     description:
       'Thickness modifier for the waveform lines, from 0 (thin) to 10 (thick). Values above 3 apply alpha-hardening to keep lines bold rather than blurry.',
   },
   'video-wave-w': {
+    name: 'Video Waveform Width',
     url: 'https://docs.imgix.com/en-US/apis/video/audio-waveforms/video-wave-w',
     description:
       'Width of the waveform bounding box. Values <= 1.0 are a percentage of the canvas; values > 1.0 are absolute pixels. Default is 1.0 (full width).',
   },
   'video-wave-x': {
+    name: 'Video Waveform X Position',
     url: 'https://docs.imgix.com/en-US/apis/video/audio-waveforms/video-wave-x',
     description:
       'Exact horizontal coordinate for the waveform bounding box. Overrides video-wave-align and video-wave-pad.',
   },
   'video-wave-y': {
+    name: 'Video Waveform Y Position',
     url: 'https://docs.imgix.com/en-US/apis/video/audio-waveforms/video-wave-y',
     description:
       'Exact vertical coordinate for the waveform bounding box. Overrides video-wave-align and video-wave-pad.',
   },
   w: {
+    name: 'Image Width',
     url: 'https://docs.imgix.com/apis/rendering/size/image-width',
     description: 'Adjusts the width of the output image.',
   },

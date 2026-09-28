@@ -15,34 +15,25 @@ export const paramsFromQuery = (query: string): QueryParam[] =>
     newParam(key, value),
   );
 
-const ImgixPill = ({ name }: { name: string }) => {
+/** Names the imgix param under its input and links to its docs; flags unknown names. */
+const ParamHint = ({ name }: { name: string }) => {
   const key = name.trim().toLowerCase();
-  if (!key) return <span className="pill-slot" />;
+  if (!key) return null;
   const canonical = IMGIX_PARAMS[key] ? key : IMGIX_ALIASES[key];
   const param = canonical ? IMGIX_PARAMS[canonical] : undefined;
-  if (!param) {
-    return (
-      <span className="pill-slot">
-        <span className="pill pill-unknown" title="Not an imgix rendering parameter">
-          unknown
-        </span>
-      </span>
-    );
-  }
+  if (!param) return <span className="param-hint is-unknown">Not an imgix parameter</span>;
   return (
-    <span className="pill-slot">
-      <a
-        className="pill pill-imgix"
-        href={param.url}
-        target="_blank"
-        rel="noreferrer"
-        title={
-          canonical === key ? param.description : `Alias of ${canonical}. ${param.description}`
-        }
-      >
-        imgix{canonical === key ? '' : ` · ${canonical}`}
-      </a>
-    </span>
+    <a
+      className="param-hint"
+      href={param.url}
+      target="_blank"
+      rel="noreferrer"
+      title={param.description}
+    >
+      <span className="pill pill-imgix">imgix</span>
+      {param.name}
+      {canonical !== key && <span className="muted"> · alias of {canonical}</span>}
+    </a>
   );
 };
 
@@ -75,20 +66,22 @@ export const ParamGrid = ({ params, onChange }: ParamGridProps) => {
             onChange={(event) => patch(param.id, { isEnabled: event.target.checked })}
             aria-label="Include this param"
           />
-          <input
-            value={param.key}
-            onChange={(event) => patch(param.id, { key: event.target.value })}
-            onPaste={(event) => handleKeyPaste(param.id, event)}
-            placeholder="param"
-            aria-label="Param name"
-          />
+          <div className="param-key">
+            <input
+              value={param.key}
+              onChange={(event) => patch(param.id, { key: event.target.value })}
+              onPaste={(event) => handleKeyPaste(param.id, event)}
+              placeholder="param"
+              aria-label="Param name"
+            />
+            <ParamHint name={param.key} />
+          </div>
           <input
             value={param.value}
             onChange={(event) => patch(param.id, { value: event.target.value })}
             placeholder="value"
             aria-label="Param value"
           />
-          <ImgixPill name={param.key} />
           <button
             type="button"
             className="icon-button"

@@ -3,6 +3,9 @@ import { writeFile } from 'node:fs/promises';
 
 const REPO = 'https://raw.githubusercontent.com/imgix/imgix-url-params/master';
 
+/** imgix display names are lowercase ("device pixel ratio"); hints show them title-cased. */
+const toTitleCase = (text) => text.replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+
 const [spec, license] = await Promise.all([
   fetch(`${REPO}/dist/parameters.json`).then((response) => {
     if (!response.ok) throw new Error(`spec: HTTP ${response.status}`);
@@ -20,7 +23,11 @@ const parameters = Object.fromEntries(
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, parameter]) => [
       name,
-      { url: parameter.url, description: parameter.short_description },
+      {
+        name: toTitleCase(parameter.display_name),
+        url: parameter.url,
+        description: parameter.short_description,
+      },
     ]),
 );
 
@@ -45,7 +52,7 @@ await writeFile(
 ${notice}
  */
 
-export type ImgixParam = { url: string; description: string };
+export type ImgixParam = { name: string; url: string; description: string };
 
 export const IMGIX_PARAMS: Record<string, ImgixParam> = ${JSON.stringify(parameters, null, 2)};
 

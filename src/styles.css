@@ -316,8 +316,8 @@ button.secondary {
 
 .param-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(0, 2fr) 9rem auto;
-  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 2fr) auto;
+  align-items: start;
   gap: 8px;
 }
 
@@ -327,23 +327,10 @@ button.secondary {
 }
 
 .param-row input[type='checkbox'] {
+  margin-top: 10px;
   width: 16px;
   height: 16px;
   accent-color: var(--accent);
-}
-
-@media (max-width: 640px) {
-  .param-row {
-    grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto;
-  }
-
-  .param-row .pill-slot {
-    display: none;
-  }
-}
-
-.pill-slot {
-  overflow: hidden;
 }
 
 .pill {
@@ -363,15 +350,6 @@ button.secondary {
   color: var(--pass);
   background: var(--pass-bg);
   text-decoration: none;
-}
-
-.pill-imgix:hover {
-  text-decoration: underline;
-}
-
-.pill-unknown {
-  color: var(--muted);
-  background: var(--border);
 }
 
 .icon-button {
@@ -423,16 +401,65 @@ button.secondary {
   background: none;
 }
 
+.param-key {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.param-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+  text-decoration: none;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+a.param-hint:hover {
+  text-decoration: underline;
+}
+
+.param-hint.is-unknown {
+  color: var(--muted);
+}
+
 .thumb-zoom {
   position: fixed;
   z-index: 10;
-  width: 360px;
-  height: 360px;
-  object-fit: contain;
-  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 372px;
+  padding: 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
   box-shadow: 0 12px 32px rgb(0 0 0 / 25%);
-  pointer-events: none;
+}
+
+.thumb-zoom h5 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.thumb-zoom a {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.thumb-zoom img {
+  width: 100%;
+  height: 320px;
+  margin-top: 4px;
+  object-fit: contain;
+  background: repeating-conic-gradient(var(--border) 0 25%, transparent 0 50%) 0 0 / 16px 16px;
 }

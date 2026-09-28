@@ -1,4 +1,5 @@
 import { type ClipboardEvent, Fragment, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { isPreviewable, type ProbeResult } from '../lib/analyze.js';
 import { INVALID_FILENAME_MESSAGE, isDatoImageFilename } from '../lib/filename.js';
 import { compare, formatBytes, type Level, type Verdict } from './compare';
@@ -16,8 +17,12 @@ import {
 const ORIGIN_HOST = 'https://www.datocms-assets.com';
 const PARALLEL_REQUESTS = 4;
 const CACHE_HEADERS = ['cf-cache-status', 'x-cache', 'age', 'cache-control', 'vary'];
-const ZOOM_SIZE = 360;
+const ZOOM_WIDTH = 372;
+const ZOOM_HEIGHT = 420;
 const ZOOM_GAP = 12;
+/** Lets the pointer cross the gap between thumbnail and popup without closing it. */
+const ZOOM_CLOSE_DELAY_MS = 150;
+const URL_DISPLAY_LENGTH = 50;
 
 type Settings = {
   projectId: string;
@@ -130,46 +135,84 @@ const cacheSummary = (result?: ProbeResult) =>
 const imageSource = (result?: ProbeResult) =>
   result?.previewUrl ?? (result && isPreviewable(result.format) ? result.url : null);
 
-/** Places the enlarged preview beside the thumbnail, kept inside the viewport. */
+/** Places the popup beside the thumbnail, kept inside the viewport. */
 const zoomPosition = (anchor: DOMRect) => ({
   left: Math.max(
     ZOOM_GAP,
-    Math.min(anchor.right + ZOOM_GAP, window.innerWidth - ZOOM_SIZE - ZOOM_GAP),
+    Math.min(anchor.right + ZOOM_GAP, window.innerWidth - ZOOM_WIDTH - ZOOM_GAP),
   ),
   top: Math.max(
     ZOOM_GAP,
     Math.min(
-      anchor.top + anchor.height / 2 - ZOOM_SIZE / 2,
-      window.innerHeight - ZOOM_SIZE - ZOOM_GAP,
+      anchor.top + anchor.height / 2 - ZOOM_HEIGHT / 2,
+      window.innerHeight - ZOOM_HEIGHT - ZOOM_GAP,
     ),
   ),
 });
 
-/** Thumbnail of the tested bytes. Hovering enlarges it; clicking opens the raw URL. */
-const Thumb = ({ result }: { result?: ProbeResult }) => {
+/** Shortens a URL in the middle, so the host and the query both stay visible. */
+const truncateMiddle = (text: string, maxLength: number) => {
+  if (text.length <= maxLength) return text;
+  const head = Math.ceil((maxLength - 1) / 2);
+  return `${text.slice(0, head)}…${text.slice(text.length - (maxLength - 1 - head))}`;
+};
+
+type ThumbProps = { title: string; result?: ProbeResult };
+
+/**
+ * Thumbnail of the tested bytes; clicking opens the raw URL. Hovering shows a larger preview
+ * with a title and link, which stays open while the pointer is over the thumbnail or the popup.
+ */
+const Thumb = ({ title, result }: ThumbProps) => {
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const source = imageSource(result);
   if (!result || !source) return <span className="thumb thumb-empty" />;
+
+  const keepOpen = () => clearTimeout(closeTimer.current);
+  const scheduleClose = () => {
+    closeTimer.current = setTimeout(() => setAnchor(null), ZOOM_CLOSE_DELAY_MS);
+  };
+
   return (
-    <a
-      href={result.url}
-      target="_blank"
-      rel="noreferrer"
-      className="thumb"
-      title="Open the raw URL in a new tab"
-      onClick={(event) => event.stopPropagation()}
-      onMouseEnter={(event) => setAnchor(event.currentTarget.getBoundingClientRect())}
-      onMouseLeave={() => setAnchor(null)}
-    >
-      <img src={source} alt="" loading="lazy" />
-      {anchor && <img className="thumb-zoom" src={source} alt="" style={zoomPosition(anchor)} />}
-    </a>
+    <>
+      <a
+        href={result.url}
+        target="_blank"
+        rel="noreferrer"
+        className="thumb"
+        onClick={(event) => event.stopPropagation()}
+        onMouseEnter={(event) => {
+          keepOpen();
+          setAnchor(event.currentTarget.getBoundingClientRect());
+        }}
+        onMouseLeave={scheduleClose}
+      >
+        <img src={source} alt={title} loading="lazy" />
+      </a>
+      {anchor &&
+        createPortal(
+          <div
+            className="thumb-zoom"
+            style={zoomPosition(anchor)}
+            onMouseEnter={keepOpen}
+            onMouseLeave={scheduleClose}
+          >
+            <h5>{title}</h5>
+            <a href={result.url} target="_blank" rel="noreferrer" title={result.url}>
+              {truncateMiddle(result.url, URL_DISPLAY_LENGTH)}
+            </a>
+            <img src={source} alt={title} />
+          </div>,
+          document.body,
+        )}
+    </>
   );
 };
 
-const Result = ({ result }: { result?: ProbeResult }) => (
+const Result = ({ title, result }: ThumbProps) => (
   <div className="result-cell">
-    <Thumb result={result} />
+    <Thumb title={title} result={result} />
     <span>{describe(result)}</span>
   </div>
 );
@@ -456,10 +499,10 @@ export const App = () => {
                           </td>
                           <td>{test.acceptLabel}</td>
                           <td>
-                            <Result result={original} />
+                            <Result title="Origin (DatoCMS)" result={original} />
                           </td>
                           <td>
-                            <Result result={proxied} />
+                            <Result title="Proxy (customer)" result={proxied} />
                           </td>
                           <td className="muted">{cacheSummary(proxied)}</td>
                           <td>
@@ -475,8 +518,8 @@ export const App = () => {
                           <tr className="detail">
                             <td colSpan={7}>
                               <div className="sides">
-                                <Side title="Origin" result={original} />
-                                <Side title="Proxy" result={proxied} />
+                                <Side title="Origin (DatoCMS)" result={original} />
+                                <Side title="Proxy (customer)" result={proxied} />
                               </div>
                             </td>
                           </tr>
