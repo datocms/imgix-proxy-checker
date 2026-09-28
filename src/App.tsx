@@ -1,8 +1,9 @@
-import { type ClipboardEvent, Fragment, useEffect, useRef, useState } from 'react';
+import { type ClipboardEvent, Fragment, type ReactNode, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { isPreviewable, type ProbeResult } from '../lib/analyze.js';
 import { INVALID_FILENAME_MESSAGE, isDatoImageFilename } from '../lib/filename.js';
 import { compare, formatBytes, type Level, type Verdict } from './compare';
+import { DIFF_TOLERANCE, diffImages, type PixelDiff } from './diff';
 import { newParam, ParamGrid, paramsFromQuery } from './ParamGrid';
 import { parseUrlInput, type UrlFields } from './parse';
 import { detectServer, probe, type ServerInfo } from './probe';
@@ -36,13 +37,26 @@ type Row = {
   original?: ProbeResult;
   proxied?: ProbeResult;
   verdict?: Verdict;
+  diff?: PixelDiff;
 };
 
-const GROUP_TITLES: Record<TestGroup, string> = {
-  negotiation: 'Format negotiation (auto=format) · simulated browser Accept headers',
-  params: 'Common imgix params',
-  custom: 'Your query · simulated browser Accept headers',
+/** Shown beside each test's label, since sections group rows by verdict. */
+const GROUP_TAGS: Record<TestGroup, string> = {
+  negotiation: 'negotiation',
+  params: 'param',
+  custom: 'your query',
 };
+
+type SectionKey = Level | 'pending';
+
+const SECTIONS: { key: SectionKey; title: string }[] = [
+  { key: 'fail', title: 'Failed' },
+  { key: 'warn', title: 'Warnings' },
+  { key: 'pass', title: 'Passed' },
+  { key: 'pending', title: 'Running' },
+];
+
+const COLUMN_COUNT = 8;
 
 const hasParams = (params: QueryParam[]) => params.some(({ key }) => key.trim());
 
@@ -157,17 +171,22 @@ const truncateMiddle = (text: string, maxLength: number) => {
   return `${text.slice(0, head)}…${text.slice(text.length - (maxLength - 1 - head))}`;
 };
 
-type ThumbProps = { title: string; result?: ProbeResult };
+type PreviewProps = {
+  title: string;
+  source: string | null;
+  href: string;
+  /** Replaces the popup's link line, e.g. with diff stats. */
+  detail?: ReactNode;
+};
 
 /**
- * Thumbnail of the tested bytes; clicking opens the raw URL. Hovering shows a larger preview
- * with a title and link, which stays open while the pointer is over the thumbnail or the popup.
+ * Thumbnail; clicking opens `href`. Hovering shows a larger preview with a title and link,
+ * which stays open while the pointer is over the thumbnail or the popup.
  */
-const Thumb = ({ title, result }: ThumbProps) => {
+const Thumb = ({ title, source, href, detail }: PreviewProps) => {
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const source = imageSource(result);
-  if (!result || !source) return <span className="thumb thumb-empty" />;
+  if (!source) return <span className="thumb thumb-empty" />;
 
   const keepOpen = () => clearTimeout(closeTimer.current);
   const scheduleClose = () => {
@@ -177,7 +196,7 @@ const Thumb = ({ title, result }: ThumbProps) => {
   return (
     <>
       <a
-        href={result.url}
+        href={href}
         target="_blank"
         rel="noreferrer"
         className="thumb"
@@ -199,9 +218,11 @@ const Thumb = ({ title, result }: ThumbProps) => {
             onMouseLeave={scheduleClose}
           >
             <h5>{title}</h5>
-            <a href={result.url} target="_blank" rel="noreferrer" title={result.url}>
-              {truncateMiddle(result.url, URL_DISPLAY_LENGTH)}
-            </a>
+            {detail ?? (
+              <a href={href} target="_blank" rel="noreferrer" title={href}>
+                {truncateMiddle(href, URL_DISPLAY_LENGTH)}
+              </a>
+            )}
             <img src={source} alt={title} />
           </div>,
           document.body,
@@ -210,12 +231,40 @@ const Thumb = ({ title, result }: ThumbProps) => {
   );
 };
 
-const Result = ({ title, result }: ThumbProps) => (
+type ResultProps = { title: string; result?: ProbeResult };
+
+const Result = ({ title, result }: ResultProps) => (
   <div className="result-cell">
-    <Thumb title={title} result={result} />
+    <Thumb title={title} source={imageSource(result)} href={result?.url ?? ''} />
     <span>{describe(result)}</span>
   </div>
 );
+
+const formatPercent = (ratio: number) =>
+  ratio > 0 && ratio < 0.001 ? '<0.1%' : `${(ratio * 100).toFixed(1)}%`;
+
+const DiffCell = ({ diff, isPending }: { diff?: PixelDiff; isPending: boolean }) => {
+  if (!diff) return <span className="muted">{isPending ? '…' : ''}</span>;
+  if (diff.kind === 'identical') return <span className="muted">Identical</span>;
+  if (diff.kind === 'skipped') return <span className="muted">{diff.reason}</span>;
+  const summary = `${formatPercent(diff.differingRatio)} differ · max Δ ${diff.maxDelta}`;
+  return (
+    <div className="result-cell">
+      <Thumb
+        title="Pixel diff"
+        source={diff.maskUrl}
+        href={diff.maskUrl}
+        detail={
+          <p className="zoom-detail">
+            {summary}. Red pixels differ by more than {DIFF_TOLERANCE}/255 in some channel; brighter
+            means larger. Compared at {diff.width}×{diff.height}.
+          </p>
+        }
+      />
+      <span>{summary}</span>
+    </div>
+  );
+};
 
 const Badge = ({ level }: { level?: Level }) => (
   <span className={`badge badge-${level ?? 'pending'}`}>{level ?? 'running'}</span>
@@ -275,6 +324,7 @@ export const App = () => {
   const [server, setServer] = useState<ServerInfo | null>(null);
   const [isCopied, setIsCopied] = useState(false);
   const hasAutoRun = useRef(false);
+  const maskUrls = useRef<string[]>([]);
 
   const update = (patch: Partial<Settings>) => setSettings((current) => ({ ...current, ...patch }));
 
@@ -303,6 +353,8 @@ export const App = () => {
     window.history.replaceState(null, '', shareUrl(current));
     setExpanded(null);
     setIsRunning(true);
+    for (const url of maskUrls.current) URL.revokeObjectURL(url);
+    maskUrls.current = [];
 
     const originBase = `${ORIGIN_HOST}/${current.projectId}/${current.filename}`;
     const proxyBase = `${current.proxyPrefix}${current.filename}`;
@@ -320,6 +372,10 @@ export const App = () => {
       setRows((rows) =>
         rows.map((row) => (row.test.id === test.id ? { test, original, proxied, verdict } : row)),
       );
+      // The diff runs in this browser, not on the server.
+      const diff = await diffImages(original, proxied);
+      if (diff.kind === 'compared') maskUrls.current.push(diff.maskUrl);
+      setRows((rows) => rows.map((row) => (row.test.id === test.id ? { ...row, diff } : row)));
     };
 
     // Negotiation and user rows share a URL per group and must run in order to expose a
@@ -348,9 +404,10 @@ export const App = () => {
     { pass: 0, warn: 0, fail: 0 },
   );
 
-  const groups = (['negotiation', 'params', 'custom'] as TestGroup[])
-    .map((group) => ({ group, rows: rows.filter((row) => row.test.group === group) }))
-    .filter(({ rows }) => rows.length > 0);
+  const sections = SECTIONS.map((section) => ({
+    ...section,
+    rows: rows.filter((row) => (row.verdict?.level ?? 'pending') === section.key),
+  })).filter(({ rows }) => rows.length > 0);
 
   return (
     <main>
@@ -477,23 +534,29 @@ export const App = () => {
                   <th>Accept (sim)</th>
                   <th>Origin</th>
                   <th>Proxy</th>
+                  <th>Diff</th>
                   <th>Proxy cache</th>
                   <th>Result</th>
                 </tr>
               </thead>
               <tbody>
-                {groups.map(({ group, rows }) => (
-                  <Fragment key={group}>
-                    <tr className="group">
-                      <td colSpan={7}>{GROUP_TITLES[group]}</td>
+                {sections.map(({ key, title, rows }) => (
+                  <Fragment key={key}>
+                    <tr className={`group group-${key}`}>
+                      <td colSpan={COLUMN_COUNT}>
+                        {title} ({rows.length})
+                      </td>
                     </tr>
-                    {rows.map(({ test, original, proxied, verdict }) => (
+                    {rows.map(({ test, original, proxied, verdict, diff }) => (
                       <Fragment key={test.id}>
                         <tr
                           className={`row row-${verdict?.level ?? 'pending'}`}
                           onClick={() => setExpanded(expanded === test.id ? null : test.id)}
                         >
-                          <td>{test.label}</td>
+                          <td>
+                            {test.label}
+                            <div className="group-tag">{GROUP_TAGS[test.group]}</div>
+                          </td>
                           <td>
                             <code>{test.query || '—'}</code>
                           </td>
@@ -503,6 +566,9 @@ export const App = () => {
                           </td>
                           <td>
                             <Result title="Proxy (customer)" result={proxied} />
+                          </td>
+                          <td>
+                            <DiffCell diff={diff} isPending={!verdict} />
                           </td>
                           <td className="muted">{cacheSummary(proxied)}</td>
                           <td>
@@ -516,7 +582,7 @@ export const App = () => {
                         </tr>
                         {expanded === test.id && (
                           <tr className="detail">
-                            <td colSpan={7}>
+                            <td colSpan={COLUMN_COUNT}>
                               <div className="sides">
                                 <Side title="Origin (DatoCMS)" result={original} />
                                 <Side title="Proxy (customer)" result={proxied} />

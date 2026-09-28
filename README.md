@@ -16,6 +16,8 @@ Checks that a reverse proxy in front of `www.datocms-assets.com` serves DatoCMS 
 
 The `/api/inspect` Vercel Function fetches every URL server-side from `dub1` (Dublin), with no caching, and returns all response headers, including `cf-cache-status`, `x-cache` and `age`. It sends no `Origin` header, so it can't leave a CORS response in the proxy's cache.
 
+The results table groups rows into Failed, Warnings and Passed. Its **Diff** column compares each pair pixel by pixel in the browser, not on the server. Pixels that differ by more than 8/255 in any channel show red over a dimmed copy of the origin. The diff only uses the previews the function returned: loading raw cross-origin URLs into a canvas would send an `Origin` header to the proxy.
+
 `Accept` values are always simulated: the function sets the header by hand, so no real browser negotiation happens. Thumbnails show the exact bytes the function tested. Clicking one opens the raw URL in a new tab.
 
 ## Sharing a run
