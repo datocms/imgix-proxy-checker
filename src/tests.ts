@@ -1,6 +1,7 @@
 import type { ImageFormat } from '../lib/analyze.js';
+import { REQUEST_VARIANTS, type RequestVariant } from '../lib/variants.js';
 
-export type TestGroup = 'negotiation' | 'params' | 'custom';
+export type TestGroup = 'negotiation' | 'vary' | 'params' | 'custom';
 
 /** One imgix permutation, requested from both the origin and the proxy. */
 export type TestCase = {
@@ -13,6 +14,16 @@ export type TestCase = {
   acceptLabel: string;
   /** Formats the proxied response must be in, on top of matching the origin. */
   expect?: { formats: ImageFormat[]; hint: string };
+  /** Checker-defined extra request header, sent to both hosts. */
+  variant?: RequestVariant;
+  /** A response header the proxy must return exactly; a mismatch fails the row. */
+  expectHeader?: { name: string; value: string; hint: string };
+  /** Explains a failure; shown whenever the row doesn't pass. */
+  failureHint?: string;
+  /** Caps the verdict, for checks that only matter when a customer uses a feature. */
+  maxLevel?: 'warn';
+  /** Warns when the proxy lets shared caches keep the image longer than DatoCMS purges allow. */
+  checkTtl?: boolean;
 };
 
 export const ACCEPT_PROFILES = {
@@ -59,68 +70,126 @@ const PARAM_CASES: [label: string, query: string][] = [
   ['Download filename', 'w=400&dl=download.png'],
 ];
 
-/** Params win over `extra`, so each row tests what its label says. */
-const mergeQuery = (extra: string, query: string) => {
-  const merged = new URLSearchParams(extra);
-  new URLSearchParams(query).forEach((value, key) => merged.set(key, value));
-  // imgix reads commas and colons literally (rect=0,0,200,200, ar=1:1), so send them unescaped.
-  return merged.toString().replace(/%2C/gi, ',').replace(/%3A/gi, ':');
+/** One editable row of the user's query-param grid. */
+export type QueryParam = { id: string; key: string; value: string; isEnabled: boolean };
+
+/** Serializes params, keeping commas and colons literal as imgix expects (rect=0,0,200,200). */
+export const serializeParams = (params: Pick<QueryParam, 'key' | 'value'>[]) => {
+  const search = new URLSearchParams();
+  for (const { key, value } of params) if (key.trim()) search.append(key.trim(), value);
+  return search.toString().replace(/%2C/gi, ',').replace(/%3A/gi, ':');
 };
+
+const ACCEPT_ORDER = [ACCEPT_PROFILES.avif, ACCEPT_PROFILES.webp, ACCEPT_PROFILES.generic];
 
 /**
  * Builds the full test matrix for one run.
  *
- * Negotiation rows use a width unique to this run so the first request misses every cache.
+ * Negotiation and cache-key rows use widths unique to this run, so the first request misses
+ * every cache.
  * They run in order (AVIF, WebP, generic) and share one URL: if the proxy forwards `Accept`
- * but leaves it out of its cache key, the generic row gets the cached AVIF.
+ * but leaves it out of its cache key, the generic row gets the cached AVIF. The user's own
+ * query runs the same way, so it gets the same check.
  */
-export const buildTestCases = (extra: string, customQueries: string[]): TestCase[] => {
-  const runWidth = 401 + Math.floor(Math.random() * 400);
-  const negotiationQuery = mergeQuery(extra, `w=${runWidth}&auto=format`);
+const uniqueWidth = (min: number) => min + Math.floor(Math.random() * 400);
+
+const ORIGIN_VALUE = REQUEST_VARIANTS.origin.value;
+
+/**
+ * Header-variant pairs on fresh URLs: first with the header, then without. When the second
+ * response carries the first one's variant, the proxy forwards that header but leaves it out
+ * of its cache key. There's no DPR pair: www.datocms-assets.com itself ignores DPR in its
+ * cache key, so the first request would poison the origin and the pair couldn't judge the proxy.
+ */
+const buildVaryCases = (): TestCase[] => {
+  const corsQuery = `w=${uniqueWidth(801)}`;
+  const generic = ACCEPT_PROFILES.generic;
+  return [
+    {
+      id: 'cache-ttl',
+      group: 'vary',
+      label: 'Cache lifetime',
+      query: 'w=400',
+      accept: generic.value,
+      acceptLabel: generic.label,
+      checkTtl: true,
+    },
+    {
+      id: 'vary-origin-with',
+      group: 'vary',
+      label: 'CORS request',
+      query: corsQuery,
+      accept: generic.value,
+      acceptLabel: `${generic.label} + Origin: ${ORIGIN_VALUE}`,
+      variant: 'origin',
+    },
+    {
+      id: 'vary-origin-without',
+      group: 'vary',
+      label: 'Plain request after CORS',
+      query: corsQuery,
+      accept: generic.value,
+      acceptLabel: `${generic.label}, no Origin`,
+      expectHeader: {
+        name: 'access-control-allow-origin',
+        value: '*',
+        hint: `The proxy's cache key ignores Origin: it served the CORS header cached for ${ORIGIN_VALUE} to a request without Origin. Add Origin to the cache key, or always send "*".`,
+      },
+    },
+  ];
+};
+
+export const buildTestCases = (userQuery: string): TestCase[] => {
+  const runWidth = uniqueWidth(401);
+  const negotiationQuery = `w=${runWidth}&auto=format`;
 
   const negotiation = (
     [
       {
         id: 'neg-avif',
         label: 'auto=format → AVIF',
-        accept: ACCEPT_PROFILES.avif.value,
-        acceptLabel: ACCEPT_PROFILES.avif.label,
         expect: { formats: ['avif'], hint: NOT_FORWARDED_HINT },
       },
       {
         id: 'neg-webp',
         label: 'auto=format → WebP',
-        accept: ACCEPT_PROFILES.webp.value,
-        acceptLabel: ACCEPT_PROFILES.webp.label,
         expect: { formats: ['webp'], hint: NOT_FORWARDED_HINT },
       },
       {
         id: 'neg-generic',
         label: 'auto=format → fallback',
-        accept: ACCEPT_PROFILES.generic.value,
-        acceptLabel: ACCEPT_PROFILES.generic.label,
         expect: { formats: LEGACY_FORMATS, hint: POISONED_HINT },
       },
-    ] satisfies Omit<TestCase, 'group' | 'query'>[]
-  ).map((test): TestCase => ({ ...test, group: 'negotiation', query: negotiationQuery }));
+    ] satisfies Pick<TestCase, 'id' | 'label' | 'expect'>[]
+  ).map(
+    (test, index): TestCase => ({
+      ...test,
+      group: 'negotiation',
+      query: negotiationQuery,
+      accept: ACCEPT_ORDER[index].value,
+      acceptLabel: ACCEPT_ORDER[index].label,
+    }),
+  );
 
   const params: TestCase[] = PARAM_CASES.map(([label, query], index) => ({
     id: `param-${index}`,
     group: 'params',
     label,
-    query: mergeQuery(extra, query),
+    query,
     accept: ACCEPT_PROFILES.generic.value,
     acceptLabel: ACCEPT_PROFILES.generic.label,
   }));
 
-  const custom: TestCase[] = customQueries.map((query, index) => ({
-    id: `custom-${index}`,
-    group: 'custom',
-    label: 'Custom',
-    query: mergeQuery(extra, query),
-    accept: ACCEPT_PROFILES.avif.value,
-    acceptLabel: ACCEPT_PROFILES.avif.label,
-  }));
+  const custom: TestCase[] = userQuery
+    ? ACCEPT_ORDER.map((profile, index) => ({
+        id: `custom-${index}`,
+        group: 'custom',
+        label: 'Your query',
+        query: userQuery,
+        accept: profile.value,
+        acceptLabel: profile.label,
+      }))
+    : [];
 
-  return [...negotiation, ...params, ...custom];
+  return [...negotiation, ...buildVaryCases(), ...params, ...custom];
 };

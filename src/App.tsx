@@ -1,21 +1,41 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { isPreviewable, type ProbeResult } from '../lib/analyze.js';
 import { compare, formatBytes, type Level, type Verdict } from './compare';
-import type { ProbeResult, ProbeVia } from '../lib/analyze.js';
-import { INVALID_FILENAME_MESSAGE, isDatoImageFilename } from '../lib/filename.js';
+import { DIFF_TOLERANCE, diffImages, type PixelDiff } from './diff';
+import { Endpoints, ORIGIN_HOST } from './Endpoints';
+import { newParam, ParamGrid, paramsFromQuery } from './ParamGrid';
+import { resolveEndpoints } from './parse';
 import { detectServer, probe, type ServerInfo } from './probe';
-import { buildTestCases, type TestCase, type TestGroup } from './tests';
+import {
+  buildTestCases,
+  type QueryParam,
+  serializeParams,
+  type TestCase,
+  type TestGroup,
+} from './tests';
 
-const ORIGIN_HOST = 'https://www.datocms-assets.com';
 const PARALLEL_REQUESTS = 4;
 const CACHE_HEADERS = ['cf-cache-status', 'x-cache', 'age', 'cache-control', 'vary'];
+const ZOOM_WIDTH = 372;
+const ZOOM_HEIGHT = 420;
+const ZOOM_GAP = 12;
+/** Lets the pointer cross the gap between thumbnail and popup without closing it. */
+const ZOOM_CLOSE_DELAY_MS = 150;
+const URL_DISPLAY_LENGTH = 50;
 
 type Settings = {
   projectId: string;
   filename: string;
   proxyPrefix: string;
-  extraParams: string;
-  customQueries: string;
-  mode: ProbeVia;
+  params: QueryParam[];
+};
+
+/** What the user typed or pasted; `Settings` derives from it. */
+type Inputs = {
+  origin: string;
+  proxy: string;
+  params: QueryParam[];
 };
 
 type Row = {
@@ -23,69 +43,82 @@ type Row = {
   original?: ProbeResult;
   proxied?: ProbeResult;
   verdict?: Verdict;
+  diff?: PixelDiff;
 };
 
-const SETTING_KEYS: (keyof Settings)[] = [
-  'projectId',
-  'filename',
-  'proxyPrefix',
-  'extraParams',
-  'customQueries',
-  'mode',
+/** Shown beside each test's label, since sections group rows by verdict. */
+const GROUP_TAGS: Record<TestGroup, string> = {
+  negotiation: 'negotiation',
+  vary: 'cache',
+  params: 'param',
+  custom: 'your query',
+};
+
+type SectionKey = Level | 'pending';
+
+const SECTIONS: { key: SectionKey; title: string }[] = [
+  { key: 'fail', title: 'Failed' },
+  { key: 'warn', title: 'Warnings' },
+  { key: 'pass', title: 'Passed' },
+  { key: 'pending', title: 'Running' },
 ];
 
-const GROUP_TITLES: Record<TestGroup, string> = {
-  negotiation: 'Format negotiation (auto=format) · simulated browser Accept headers',
-  params: 'Common imgix params',
-  custom: 'Custom queries',
-};
+const COLUMN_COUNT = 8;
 
-/** All state lives in the query string, so a link reproduces a run and nothing is stored. */
-const readSettings = (): Settings => {
-  const params = new URLSearchParams(window.location.search);
-  const settings = Object.fromEntries(
-    SETTING_KEYS.map((key) => [key, params.get(key) ?? '']),
-  ) as Settings;
-  return { ...settings, mode: settings.mode === 'browser' ? 'browser' : 'server' };
-};
+const LEVEL_ORDER: Level[] = ['fail', 'warn', 'pass'];
 
-const shareUrl = (settings: Settings) => {
-  const params = new URLSearchParams();
-  for (const key of SETTING_KEYS) if (settings[key]) params.set(key, settings[key]);
-  return `${window.location.origin}${window.location.pathname}?${params}`;
-};
+const LEVEL_NAMES: Record<Level, string> = { fail: 'failed', warn: 'warning', pass: 'passed' };
 
-const hasSharedSettings = (settings: Settings) =>
-  Boolean(
-    /^\d+$/.test(settings.projectId) &&
-    isDatoImageFilename(settings.filename) &&
-    settings.proxyPrefix,
-  );
-
-const withQuery = (base: string, query: string) => (query ? `${base}?${query}` : base);
+/** Failures and warnings need attention; passes start hidden. */
+const DEFAULT_VISIBLE: Record<Level, boolean> = { fail: true, warn: true, pass: false };
 
 /**
- * Fills settings from a pasted URL. An origin URL yields project, filename and params;
- * any other URL yields the proxy prefix and filename.
+ * All state lives in the page's query string, so a link reproduces a run and nothing is stored.
+ * Enabled params go in `query`, disabled ones in `off`. `extraParams` and `customQueries` are
+ * read for links made before the param grid.
  */
-const parsePastedUrl = (raw: string): Partial<Settings> => {
-  const url = new URL(raw.trim());
-  const segments = url.pathname.split('/').filter(Boolean);
-  const extraParams = url.search.slice(1);
-  if (url.hostname.endsWith('datocms-assets.com')) {
-    return {
-      projectId: segments[0] ?? '',
-      filename: segments.slice(1).join('/'),
-      extraParams,
-    };
-  }
-  const filename = segments.at(-1) ?? '';
+const readInputs = (): Inputs => {
+  const search = new URLSearchParams(window.location.search);
+  const query =
+    search.get('query') ??
+    search.get('extraParams') ??
+    search.get('customQueries')?.split('\n')[0] ??
+    '';
+  const disabled = paramsFromQuery(search.get('off') ?? '').map((param) => ({
+    ...param,
+    isEnabled: false,
+  }));
+  const projectId = search.get('projectId') ?? '';
+  const filename = search.get('filename') ?? '';
+  const proxyPrefix = search.get('proxyPrefix') ?? '';
   return {
-    proxyPrefix: `${url.origin}/${segments.slice(0, -1).join('/')}/`.replace(/\/+$/, '/'),
-    filename,
-    extraParams,
+    origin: projectId && filename ? `${ORIGIN_HOST}/${projectId}/${filename}` : projectId,
+    proxy: proxyPrefix && `${proxyPrefix.replace(/\/?$/, '/')}${filename}`,
+    params: [...paramsFromQuery(query), ...disabled],
   };
 };
+
+const toSettings = (inputs: Inputs): Settings => {
+  const { projectId, filename, proxyPrefix } = resolveEndpoints(inputs.origin, inputs.proxy);
+  return { projectId, filename, proxyPrefix, params: inputs.params };
+};
+
+const isRunnable = (inputs: Inputs) => resolveEndpoints(inputs.origin, inputs.proxy).isComplete;
+
+const shareUrl = (settings: Settings) => {
+  const search = new URLSearchParams();
+  const fields = {
+    projectId: settings.projectId,
+    filename: settings.filename,
+    proxyPrefix: settings.proxyPrefix,
+    query: serializeParams(settings.params.filter(({ isEnabled }) => isEnabled)),
+    off: serializeParams(settings.params.filter(({ isEnabled }) => !isEnabled)),
+  };
+  for (const [key, value] of Object.entries(fields)) if (value) search.set(key, value);
+  return `${window.location.origin}${window.location.pathname}?${search}`;
+};
+
+const withQuery = (base: string, query: string) => (query ? `${base}?${query}` : base);
 
 /** Runs `tasks` with at most `limit` in flight. */
 const runPool = async (tasks: (() => Promise<void>)[], limit: number) => {
@@ -103,132 +136,241 @@ const describe = (result?: ProbeResult) => {
   return `${result.format} · ${size} · ${formatBytes(result.bytes)}`;
 };
 
-const cacheSummary = (result?: ProbeResult) => {
-  if (result?.via !== 'server') return result?.headers['cache-control'] ?? '';
-  return ['cf-cache-status', 'x-cache', 'age']
-    .filter((name) => result.headers[name])
-    .map((name) => `${name}: ${result.headers[name]}`)
+const cacheSummary = (result?: ProbeResult) =>
+  ['cf-cache-status', 'x-cache', 'age']
+    .filter((name) => result?.headers[name])
+    .map((name) => `${name}: ${result?.headers[name]}`)
     .join(' · ');
+
+/** Bodies over the server's preview limit fall back to loading the raw URL. */
+const imageSource = (result?: ProbeResult) =>
+  result?.previewUrl ?? (result && isPreviewable(result.format) ? result.url : null);
+
+/** Places the popup beside the thumbnail, kept inside the viewport. */
+const zoomPosition = (anchor: DOMRect) => ({
+  left: Math.max(
+    ZOOM_GAP,
+    Math.min(anchor.right + ZOOM_GAP, window.innerWidth - ZOOM_WIDTH - ZOOM_GAP),
+  ),
+  top: Math.max(
+    ZOOM_GAP,
+    Math.min(
+      anchor.top + anchor.height / 2 - ZOOM_HEIGHT / 2,
+      window.innerHeight - ZOOM_HEIGHT - ZOOM_GAP,
+    ),
+  ),
+});
+
+/** Shortens a URL in the middle, so the host and the query both stay visible. */
+const truncateMiddle = (text: string, maxLength: number) => {
+  if (text.length <= maxLength) return text;
+  const head = Math.ceil((maxLength - 1) / 2);
+  return `${text.slice(0, head)}…${text.slice(text.length - (maxLength - 1 - head))}`;
+};
+
+type PreviewProps = {
+  title: string;
+  source: string | null;
+  href: string;
+  /** Replaces the popup's link line, e.g. with diff stats. */
+  detail?: ReactNode;
+};
+
+/**
+ * Thumbnail; clicking opens `href`. Hovering shows a larger preview with a title and link,
+ * which stays open while the pointer is over the thumbnail or the popup.
+ */
+const Thumb = ({ title, source, href, detail }: PreviewProps) => {
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  if (!source) return <span className="thumb thumb-empty" />;
+
+  const keepOpen = () => clearTimeout(closeTimer.current);
+  const scheduleClose = () => {
+    closeTimer.current = setTimeout(() => setAnchor(null), ZOOM_CLOSE_DELAY_MS);
+  };
+
+  return (
+    <>
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="thumb"
+        onClick={(event) => event.stopPropagation()}
+        onMouseEnter={(event) => {
+          keepOpen();
+          setAnchor(event.currentTarget.getBoundingClientRect());
+        }}
+        onMouseLeave={scheduleClose}
+      >
+        <img src={source} alt={title} loading="lazy" />
+      </a>
+      {anchor &&
+        createPortal(
+          <div
+            className="thumb-zoom"
+            style={zoomPosition(anchor)}
+            onMouseEnter={keepOpen}
+            onMouseLeave={scheduleClose}
+          >
+            <h5>{title}</h5>
+            {detail ?? (
+              <a href={href} target="_blank" rel="noreferrer" title={href}>
+                {truncateMiddle(href, URL_DISPLAY_LENGTH)}
+              </a>
+            )}
+            <img src={source} alt={title} />
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+};
+
+type ResultProps = { title: string; result?: ProbeResult };
+
+const Result = ({ title, result }: ResultProps) => (
+  <div className="result-cell">
+    <Thumb title={title} source={imageSource(result)} href={result?.url ?? ''} />
+    <span>{describe(result)}</span>
+  </div>
+);
+
+const formatPercent = (ratio: number) =>
+  ratio > 0 && ratio < 0.001 ? '<0.1%' : `${(ratio * 100).toFixed(1)}%`;
+
+const DiffCell = ({ diff, isPending }: { diff?: PixelDiff; isPending: boolean }) => {
+  if (!diff) return <span className="muted">{isPending ? '…' : ''}</span>;
+  if (diff.kind === 'identical') return <span className="muted">Identical</span>;
+  if (diff.kind === 'skipped') return <span className="muted">{diff.reason}</span>;
+  const summary = `${formatPercent(diff.differingRatio)} differ · max Δ ${diff.maxDelta}`;
+  return (
+    <div className="result-cell">
+      <Thumb
+        title="Pixel diff"
+        source={diff.maskUrl}
+        href={diff.maskUrl}
+        detail={
+          <p className="zoom-detail">
+            {summary}. Red pixels differ by more than {DIFF_TOLERANCE}/255 in some channel; brighter
+            means larger. Compared at {diff.width}×{diff.height}.
+          </p>
+        }
+      />
+      <span>{summary}</span>
+    </div>
+  );
 };
 
 const Badge = ({ level }: { level?: Level }) => (
   <span className={`badge badge-${level ?? 'pending'}`}>{level ?? 'running'}</span>
 );
 
-const Side = ({ title, result }: { title: string; result?: ProbeResult }) => (
-  <div className="side">
-    <h4>{title}</h4>
-    {result?.previewUrl ? (
-      <img src={result.previewUrl} alt={title} />
-    ) : (
-      <div className="noimg">No image</div>
-    )}
-    <a href={result?.url} target="_blank" rel="noreferrer" className="url">
-      {result?.url}
-    </a>
-    {result && (
-      <table className="headers">
-        <tbody>
-          <tr>
-            <th>status</th>
-            <td>{result.status}</td>
-          </tr>
-          <tr>
-            <th>sha256</th>
-            <td>{result.sha256.slice(0, 16)}</td>
-          </tr>
-          <tr>
-            <th>time</th>
-            <td>
-              {result.ms} ms (from {result.via})
-            </td>
-          </tr>
-          {result.finalUrl !== result.url && (
+const Side = ({ title, result }: { title: string; result?: ProbeResult }) => {
+  const source = imageSource(result);
+  return (
+    <div className="side">
+      <h4>{title}</h4>
+      {source ? <img src={source} alt={title} /> : <div className="noimg">No image</div>}
+      <a href={result?.url} target="_blank" rel="noreferrer" className="url">
+        {result?.url}
+      </a>
+      {result && (
+        <table className="headers">
+          <tbody>
             <tr>
-              <th>redirected to</th>
-              <td>{result.finalUrl}</td>
+              <th>status</th>
+              <td>{result.status}</td>
             </tr>
-          )}
-          {Object.entries(result.headers)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([name, value]) => (
-              <tr key={name} className={CACHE_HEADERS.includes(name) ? 'hl' : undefined}>
-                <th>{name}</th>
-                <td>{value}</td>
+            <tr>
+              <th>sha256</th>
+              <td>{result.sha256.slice(0, 16)}</td>
+            </tr>
+            <tr>
+              <th>time</th>
+              <td>{result.ms} ms</td>
+            </tr>
+            {result.finalUrl !== result.url && (
+              <tr>
+                <th>redirected to</th>
+                <td>{result.finalUrl}</td>
               </tr>
-            ))}
-        </tbody>
-      </table>
-    )}
-  </div>
-);
+            )}
+            {Object.entries(result.headers)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([name, value]) => (
+                <tr key={name} className={CACHE_HEADERS.includes(name) ? 'hl' : undefined}>
+                  <th>{name}</th>
+                  <td>{value}</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+};
 
 export const App = () => {
-  const [settings, setSettings] = useState<Settings>(readSettings);
-  const [pasted, setPasted] = useState('');
+  const [inputs, setInputs] = useState<Inputs>(readInputs);
   const [rows, setRows] = useState<Row[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [server, setServer] = useState<ServerInfo | null>(null);
   const [isCopied, setIsCopied] = useState(false);
-  const blobUrls = useRef<string[]>([]);
+  const [visibleLevels, setVisibleLevels] = useState(DEFAULT_VISIBLE);
+  const toggleLevel = (level: Level) =>
+    setVisibleLevels((current) => ({ ...current, [level]: !current[level] }));
+  const isSectionVisible = (key: SectionKey) => key === 'pending' || visibleLevels[key];
   const hasAutoRun = useRef(false);
+  const maskUrls = useRef<string[]>([]);
 
-  const update = (patch: Partial<Settings>) => setSettings((current) => ({ ...current, ...patch }));
-
-  const applyPasted = (raw: string) => {
-    setPasted(raw);
-    try {
-      update(parsePastedUrl(raw));
-    } catch {
-      // Not a full URL yet; wait for more input.
-    }
-  };
-
-  const isReady = hasSharedSettings(settings);
-  const via: ProbeVia = settings.mode === 'server' && server?.isAvailable ? 'server' : 'browser';
+  const update = (patch: Partial<Inputs>) => setInputs((current) => ({ ...current, ...patch }));
+  const resolved = resolveEndpoints(inputs.origin, inputs.proxy);
+  const isReady = resolved.isComplete && server?.isAvailable === true;
 
   const copyShareLink = async () => {
-    await navigator.clipboard.writeText(shareUrl(settings));
+    await navigator.clipboard.writeText(shareUrl(toSettings(inputs)));
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 1500);
   };
 
-  const run = async (via: ProbeVia) => {
-    window.history.replaceState(null, '', shareUrl(settings));
-    for (const url of blobUrls.current) URL.revokeObjectURL(url);
-    blobUrls.current = [];
+  const run = async (current: Settings) => {
+    window.history.replaceState(null, '', shareUrl(current));
     setExpanded(null);
     setIsRunning(true);
+    for (const url of maskUrls.current) URL.revokeObjectURL(url);
+    maskUrls.current = [];
 
-    const originBase = `${ORIGIN_HOST}/${settings.projectId}/${settings.filename}`;
-    const proxyBase = `${settings.proxyPrefix.replace(/\/?$/, '/')}${settings.filename}`;
-    const customQueries = settings.customQueries
-      .split('\n')
-      .map((line) => line.trim().replace(/^\?/, ''))
-      .filter(Boolean);
-    const tests = buildTestCases(settings.extraParams.replace(/^\?/, ''), customQueries);
+    const originBase = `${ORIGIN_HOST}/${current.projectId}/${current.filename}`;
+    const proxyBase = `${current.proxyPrefix}${current.filename}`;
+    const tests = buildTestCases(
+      serializeParams(current.params.filter(({ isEnabled }) => isEnabled)),
+    );
     setRows(tests.map((test) => ({ test })));
 
     const execute = async (test: TestCase) => {
       const [original, proxied] = await Promise.all([
-        probe(withQuery(originBase, test.query), test.accept, via),
-        probe(withQuery(proxyBase, test.query), test.accept, via),
+        probe(withQuery(originBase, test.query), test.accept, test.variant),
+        probe(withQuery(proxyBase, test.query), test.accept, test.variant),
       ]);
-      for (const { previewUrl } of [original, proxied])
-        if (previewUrl?.startsWith('blob:')) blobUrls.current.push(previewUrl);
       const verdict = compare(test, original, proxied);
-      setRows((current) =>
-        current.map((row) =>
-          row.test.id === test.id ? { test, original, proxied, verdict } : row,
-        ),
+      setRows((rows) =>
+        rows.map((row) => (row.test.id === test.id ? { test, original, proxied, verdict } : row)),
       );
+      // The diff runs in this browser, not on the server.
+      const diff = await diffImages(original, proxied);
+      if (diff.kind === 'compared') maskUrls.current.push(diff.maskUrl);
+      setRows((rows) => rows.map((row) => (row.test.id === test.id ? { ...row, diff } : row)));
     };
 
-    // Negotiation rows share one URL and must run in order to expose a poisoned cache.
-    for (const test of tests.filter((test) => test.group === 'negotiation')) await execute(test);
+    // Negotiation and user rows share a URL per group and must run in order to expose a
+    // poisoned cache; the param rows are independent.
+    const isSequential = (test: TestCase) => test.group !== 'params';
+    for (const test of tests.filter(isSequential)) await execute(test);
     await runPool(
-      tests.filter((test) => test.group !== 'negotiation').map((test) => () => execute(test)),
+      tests.filter((test) => !isSequential(test)).map((test) => () => execute(test)),
       PARALLEL_REQUESTS,
     );
     setIsRunning(false);
@@ -238,9 +380,9 @@ export const App = () => {
   useEffect(() => {
     detectServer().then((info) => {
       setServer(info);
-      if (hasAutoRun.current || !hasSharedSettings(settings)) return;
+      if (hasAutoRun.current || !info.isAvailable || !isRunnable(inputs)) return;
       hasAutoRun.current = true;
-      run(settings.mode === 'server' && info.isAvailable ? 'server' : 'browser');
+      run(toSettings(inputs));
     });
   }, []);
 
@@ -249,9 +391,10 @@ export const App = () => {
     { pass: 0, warn: 0, fail: 0 },
   );
 
-  const groups = (['negotiation', 'params', 'custom'] as TestGroup[])
-    .map((group) => ({ group, rows: rows.filter((row) => row.test.group === group) }))
-    .filter(({ rows }) => rows.length > 0);
+  const sections = SECTIONS.map((section) => ({
+    ...section,
+    rows: rows.filter((row) => (row.verdict?.level ?? 'pending') === section.key),
+  })).filter(({ rows }) => rows.length > 0);
 
   return (
     <main>
@@ -260,113 +403,56 @@ export const App = () => {
         <p>
           Compares a reverse-proxied DatoCMS asset with the same asset on{' '}
           <code>www.datocms-assets.com</code>, across common imgix params and{' '}
-          <code>auto=format</code> negotiation. Nothing is cached or stored: every request goes
-          straight to both hosts, and all settings live in this page's URL.
+          <code>auto=format</code> negotiation. Requests go from the checker's server
+          {server?.region ? ` (${server.region})` : ''} straight to both hosts. Nothing is cached or
+          stored: all settings live in this page's URL.
         </p>
       </header>
 
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          run(via);
+          run(toSettings(inputs));
         }}
       >
-        <label className="wide">
-          Paste a URL (origin or proxied) to fill the fields
-          <input
-            value={pasted}
-            onChange={(event) => applyPasted(event.target.value)}
-            placeholder="https://www.datocms-assets.com/12345/1700000000-photo.png?w=800"
-          />
-        </label>
-        <label>
-          Project ID
-          <input
-            value={settings.projectId}
-            onChange={(event) => update({ projectId: event.target.value.trim() })}
-            placeholder="12345"
-            required
-          />
-          {settings.projectId && !/^\d+$/.test(settings.projectId) && (
-            <span className="warn-text">Project IDs are numeric.</span>
-          )}
-        </label>
-        <label>
-          Filename
-          <input
-            value={settings.filename}
-            onChange={(event) => update({ filename: event.target.value.trim() })}
-            placeholder="1700000000-photo.png"
-            required
-          />
-          {settings.filename && !isDatoImageFilename(settings.filename) && (
-            <span className="warn-text">{INVALID_FILENAME_MESSAGE}</span>
-          )}
-        </label>
-        <label className="wide">
-          <span>
-            Proxy prefix (replaces <code>{ORIGIN_HOST}/&lt;project&gt;/</code>)
+        <Endpoints
+          originInput={inputs.origin}
+          proxyInput={inputs.proxy}
+          resolved={resolved}
+          onOriginChange={(origin) => update({ origin })}
+          onProxyChange={(proxy) => update({ proxy })}
+          onQuery={(query) => update({ params: paramsFromQuery(query) })}
+        />
+        <div className="wide params-field">
+          <span className="field-label">
+            Your query params: run as their own test under each simulated <code>Accept</code>{' '}
+            header. Paste a query string or URL into a name field to fill several rows.
           </span>
-          <input
-            value={settings.proxyPrefix}
-            onChange={(event) => update({ proxyPrefix: event.target.value.trim() })}
-            placeholder="https://example.com/assets/"
-            required
+          <ParamGrid
+            params={inputs.params.length ? inputs.params : [newParam()]}
+            onChange={(params) => update({ params })}
           />
-        </label>
-        <label className="wide">
-          Extra params added to every test (tests override clashes)
-          <input
-            value={settings.extraParams}
-            onChange={(event) => update({ extraParams: event.target.value.trim() })}
-            placeholder="auto=compress&q=90"
-          />
-        </label>
-        <label className="wide">
-          Custom queries, one per line (sent with a simulated AVIF-capable Accept)
-          <textarea
-            value={settings.customQueries}
-            onChange={(event) => update({ customQueries: event.target.value })}
-            placeholder="w=1440&fm=webp&q=90"
-            rows={2}
-          />
-        </label>
-        <fieldset className="wide mode">
-          <legend>Fetch from</legend>
-          <label className="radio">
-            <input
-              type="radio"
-              checked={settings.mode === 'server'}
-              disabled={server?.isAvailable === false}
-              onChange={() => update({ mode: 'server' })}
-            />
-            Checker server{server?.region ? ` (${server.region})` : ''}: shows every header,
-            including CDN cache status
-          </label>
-          <label className="radio">
-            <input
-              type="radio"
-              checked={settings.mode === 'browser'}
-              onChange={() => update({ mode: 'browser' })}
-            />
-            This browser: hits your nearest CDN edge, but can only read Content-Type and
-            Cache-Control
-          </label>
-          {server?.isAvailable === false && (
-            <p className="warn-text">
-              Server function unreachable here, so requests go from the browser.
-            </p>
-          )}
-        </fieldset>
+        </div>
         <p className="wide sim-note">
-          <strong>Simulation:</strong> both modes set the <code>Accept</code> header by hand to
+          <strong>Simulation:</strong> the checker sets the <code>Accept</code> header by hand to
           imitate AVIF-capable, WebP-only and legacy clients. No real browser negotiation happens.
         </p>
+        {server?.isAvailable === false && (
+          <p className="wide warn-text">
+            The checker's server function is unreachable, so checks can't run. Use{' '}
+            <code>npm run dev</code> or the Vercel deployment.
+          </p>
+        )}
         <div className="actions wide">
           <button type="submit" disabled={!isReady || isRunning}>
-            {isRunning ? 'Running…' : 'Run checks'}
+            {isRunning ? 'Running…' : server ? 'Run checks' : 'Connecting…'}
           </button>
-          <button type="button" className="secondary" disabled={!isReady} onClick={copyShareLink}>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!resolved.isComplete}
+            onClick={copyShareLink}
+          >
             {isCopied ? 'Copied' : 'Copy share link'}
           </button>
         </div>
@@ -374,14 +460,29 @@ export const App = () => {
 
       {rows.length > 0 && (
         <section>
-          <p className="summary">
-            <Badge level="pass" /> {counts.pass} <Badge level="warn" /> {counts.warn}{' '}
-            <Badge level="fail" /> {counts.fail}
-            <span className="muted">
-              {' '}
-              · {rows.length} tests · click a row for previews and headers
-            </span>
-          </p>
+          <div className="summary">
+            <p className="muted">
+              {rows.length} tests · hover a thumbnail to enlarge, click it to open the raw URL,
+              click a row for full headers
+            </p>
+            <div className="filters" role="group" aria-label="Show results">
+              {LEVEL_ORDER.map((level) => (
+                <label
+                  key={level}
+                  className={`filter${visibleLevels[level] ? '' : ' is-off'}`}
+                  title={`${visibleLevels[level] ? 'Hide' : 'Show'} ${LEVEL_NAMES[level]} rows`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={visibleLevels[level]}
+                    onChange={() => toggleLevel(level)}
+                  />
+                  <Badge level={level} />
+                  <span className="filter-count">{counts[level]}</span>
+                </label>
+              ))}
+            </div>
+          </div>
           <div className="scroll">
             <table className="results">
               <thead>
@@ -391,51 +492,72 @@ export const App = () => {
                   <th>Accept (sim)</th>
                   <th>Origin</th>
                   <th>Proxy</th>
-                  <th>{via === 'server' ? 'Proxy cache' : 'Proxy Cache-Control'}</th>
+                  <th>Diff</th>
+                  <th>Proxy cache</th>
                   <th>Result</th>
                 </tr>
               </thead>
               <tbody>
-                {groups.map(({ group, rows }) => (
-                  <Fragment key={group}>
-                    <tr className="group">
-                      <td colSpan={7}>{GROUP_TITLES[group]}</td>
+                {sections.map(({ key, title, rows }) => (
+                  <Fragment key={key}>
+                    <tr
+                      className={`group group-${key}${key === 'pending' ? '' : ' is-toggle'}`}
+                      onClick={() => key !== 'pending' && toggleLevel(key)}
+                    >
+                      <td colSpan={COLUMN_COUNT}>
+                        {title} ({rows.length})
+                        {!isSectionVisible(key) && (
+                          <span className="muted"> · hidden, click to show</span>
+                        )}
+                      </td>
                     </tr>
-                    {rows.map(({ test, original, proxied, verdict }) => (
-                      <Fragment key={test.id}>
-                        <tr
-                          className={`row row-${verdict?.level ?? 'pending'}`}
-                          onClick={() => setExpanded(expanded === test.id ? null : test.id)}
-                        >
-                          <td>{test.label}</td>
-                          <td>
-                            <code>{test.query || '—'}</code>
-                          </td>
-                          <td>{test.acceptLabel}</td>
-                          <td>{describe(original)}</td>
-                          <td>{describe(proxied)}</td>
-                          <td className="muted">{cacheSummary(proxied)}</td>
-                          <td>
-                            <Badge level={verdict?.level} />
-                            {verdict?.notes.map((note) => (
-                              <div key={note} className="note">
-                                {note}
-                              </div>
-                            ))}
-                          </td>
-                        </tr>
-                        {expanded === test.id && (
-                          <tr className="detail">
-                            <td colSpan={7}>
-                              <div className="sides">
-                                <Side title="Origin" result={original} />
-                                <Side title="Proxy" result={proxied} />
-                              </div>
+                    {(isSectionVisible(key) ? rows : []).map(
+                      ({ test, original, proxied, verdict, diff }) => (
+                        <Fragment key={test.id}>
+                          <tr
+                            className={`row row-${verdict?.level ?? 'pending'}`}
+                            onClick={() => setExpanded(expanded === test.id ? null : test.id)}
+                          >
+                            <td>
+                              {test.label}
+                              <div className="group-tag">{GROUP_TAGS[test.group]}</div>
+                            </td>
+                            <td>
+                              <code>{test.query || '—'}</code>
+                            </td>
+                            <td>{test.acceptLabel}</td>
+                            <td>
+                              <Result title="Origin (DatoCMS)" result={original} />
+                            </td>
+                            <td>
+                              <Result title="Proxy (customer)" result={proxied} />
+                            </td>
+                            <td>
+                              <DiffCell diff={diff} isPending={!verdict} />
+                            </td>
+                            <td className="muted">{cacheSummary(proxied)}</td>
+                            <td>
+                              <Badge level={verdict?.level} />
+                              {verdict?.notes.map((note) => (
+                                <div key={note} className="note">
+                                  {note}
+                                </div>
+                              ))}
                             </td>
                           </tr>
-                        )}
-                      </Fragment>
-                    ))}
+                          {expanded === test.id && (
+                            <tr className="detail">
+                              <td colSpan={COLUMN_COUNT}>
+                                <div className="sides">
+                                  <Side title="Origin (DatoCMS)" result={original} />
+                                  <Side title="Proxy (customer)" result={proxied} />
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      ),
+                    )}
                   </Fragment>
                 ))}
               </tbody>

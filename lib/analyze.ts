@@ -11,9 +11,6 @@ export type ImageFormat =
   | 'pdf'
   | 'unknown';
 
-/** Where the request left from: the viewer's browser, or the checker's server function. */
-export type ProbeVia = 'browser' | 'server';
-
 export type BodyStats = {
   /** Sniffed from magic bytes, not from Content-Type. */
   format: ImageFormat;
@@ -31,8 +28,7 @@ export type ProbeResult = BodyStats & {
   error?: string;
   ms: number;
   headers: Record<string, string>;
-  via: ProbeVia;
-  /** Blob or data URL for the side-by-side preview; null for non-images or oversized bodies. */
+  /** Data URL of the tested bytes; null for non-images or oversized bodies. */
   previewUrl: string | null;
 };
 
@@ -60,7 +56,7 @@ export const isPreviewable = (format: ImageFormat) => format !== 'unknown' && fo
 const toHex = (buffer: ArrayBuffer) =>
   Array.from(new Uint8Array(buffer), (byte) => byte.toString(16).padStart(2, '0')).join('');
 
-/** Computes format, size, dimensions and SHA-256 of a response body. Runs in browsers and Node. */
+/** Computes format, size, dimensions and SHA-256 of a response body. */
 export const analyzeBody = async (body: Uint8Array<ArrayBuffer>): Promise<BodyStats> => {
   const format = sniffFormat(body.subarray(0, 256));
   let dimensions = { width: null as number | null, height: null as number | null };
