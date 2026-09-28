@@ -433,7 +433,7 @@ export const App = () => {
         )}
         <div className="actions wide">
           <button type="submit" disabled={!isReady || isRunning}>
-            {isRunning ? 'Running…' : 'Run checks'}
+            {isRunning ? 'Running…' : server ? 'Run checks' : 'Connecting…'}
           </button>
           <button
             type="button"
