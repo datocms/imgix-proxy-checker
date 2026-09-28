@@ -297,9 +297,25 @@ button.secondary {
 }
 
 .params-field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.params-field > summary {
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.params-field[open] > summary {
+  margin-bottom: 8px;
+}
+
+.params-help {
+  margin: 0 0 10px;
+  font-size: 12px;
 }
 
 .param-grid {

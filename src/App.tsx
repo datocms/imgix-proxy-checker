@@ -328,6 +328,9 @@ export const App = () => {
 
   const update = (patch: Partial<Inputs>) => setInputs((current) => ({ ...current, ...patch }));
   const resolved = resolveEndpoints(inputs.origin, inputs.proxy);
+  const enabledParams = inputs.params.filter(({ isEnabled, key }) => isEnabled && key.trim());
+  const enabledCount = enabledParams.length;
+  const enabledQuery = serializeParams(enabledParams);
   const isReady = resolved.isComplete && server?.isAvailable === true;
 
   const copyShareLink = async () => {
@@ -423,16 +426,24 @@ export const App = () => {
           onProxyChange={(proxy) => update({ proxy })}
           onQuery={(query) => update({ params: paramsFromQuery(query) })}
         />
-        <div className="wide params-field">
-          <span className="field-label">
-            Your query params: run as their own test under each simulated <code>Accept</code>{' '}
-            header. Paste a query string or URL into a name field to fill several rows.
-          </span>
+        <details className="wide params-field">
+          <summary>
+            <span className="field-label">Your query params</span>
+            <span className="muted">
+              {enabledQuery
+                ? ` · ${enabledCount} enabled: ?${truncateMiddle(enabledQuery, URL_DISPLAY_LENGTH)}`
+                : ' · none'}
+            </span>
+          </summary>
+          <p className="muted params-help">
+            They run as their own test under each simulated <code>Accept</code> header. Paste a
+            query string or URL into a name field to fill several rows.
+          </p>
           <ParamGrid
             params={inputs.params.length ? inputs.params : [newParam()]}
             onChange={(params) => update({ params })}
           />
-        </div>
+        </details>
         <p className="wide sim-note">
           <strong>Simulation:</strong> the checker sets the <code>Accept</code> header by hand to
           imitate AVIF-capable, WebP-only and legacy clients. No real browser negotiation happens.
