@@ -19,10 +19,12 @@ const RELAYED_HEADERS: Record<string, boolean> = {
  */
 export const MAX_PROXY_TTL_SECONDS = 15 * 60;
 
+const plural = (count: number, unit: string) => `${count} ${unit}${count === 1 ? '' : 's'}`;
+
 const formatDuration = (seconds: number) => {
-  if (seconds >= 86_400) return `${Math.round(seconds / 86_400)} days`;
-  if (seconds >= 3600) return `${Math.round(seconds / 3600)} hours`;
-  return `${Math.round(seconds / 60)} minutes`;
+  if (seconds >= 86_400) return plural(Math.round(seconds / 86_400), 'day');
+  if (seconds >= 3600) return plural(Math.round(seconds / 3600), 'hour');
+  return plural(Math.round(seconds / 60), 'minute');
 };
 
 /** Shared-cache TTL a response allows: CDN-specific headers first, then s-maxage, then max-age. */
