@@ -1,6 +1,7 @@
 import type { ImageFormat } from '../lib/analyze.js';
+import { REQUEST_VARIANTS, type RequestVariant } from '../lib/variants.js';
 
-export type TestGroup = 'negotiation' | 'params' | 'custom';
+export type TestGroup = 'negotiation' | 'vary' | 'params' | 'custom';
 
 /** One imgix permutation, requested from both the origin and the proxy. */
 export type TestCase = {
@@ -13,6 +14,14 @@ export type TestCase = {
   acceptLabel: string;
   /** Formats the proxied response must be in, on top of matching the origin. */
   expect?: { formats: ImageFormat[]; hint: string };
+  /** Checker-defined extra request header, sent to both hosts. */
+  variant?: RequestVariant;
+  /** A response header the proxy must return exactly; a mismatch fails the row. */
+  expectHeader?: { name: string; value: string; hint: string };
+  /** Explains a failure; shown whenever the row doesn't pass. */
+  failureHint?: string;
+  /** Caps the verdict, for checks that only matter when a customer uses a feature. */
+  maxLevel?: 'warn';
 };
 
 export const ACCEPT_PROFILES = {
@@ -74,13 +83,53 @@ const ACCEPT_ORDER = [ACCEPT_PROFILES.avif, ACCEPT_PROFILES.webp, ACCEPT_PROFILE
 /**
  * Builds the full test matrix for one run.
  *
- * Negotiation rows use a width unique to this run so the first request misses every cache.
+ * Negotiation and cache-key rows use widths unique to this run, so the first request misses
+ * every cache.
  * They run in order (AVIF, WebP, generic) and share one URL: if the proxy forwards `Accept`
  * but leaves it out of its cache key, the generic row gets the cached AVIF. The user's own
  * query runs the same way, so it gets the same check.
  */
+const uniqueWidth = (min: number) => min + Math.floor(Math.random() * 400);
+
+const ORIGIN_VALUE = REQUEST_VARIANTS.origin.value;
+
+/**
+ * Header-variant pairs on fresh URLs: first with the header, then without. When the second
+ * response carries the first one's variant, the proxy forwards that header but leaves it out
+ * of its cache key. There's no DPR pair: www.datocms-assets.com itself ignores DPR in its
+ * cache key, so the first request would poison the origin and the pair couldn't judge the proxy.
+ */
+const buildVaryCases = (): TestCase[] => {
+  const corsQuery = `w=${uniqueWidth(801)}`;
+  const generic = ACCEPT_PROFILES.generic;
+  return [
+    {
+      id: 'vary-origin-with',
+      group: 'vary',
+      label: 'CORS request',
+      query: corsQuery,
+      accept: generic.value,
+      acceptLabel: `${generic.label} + Origin: ${ORIGIN_VALUE}`,
+      variant: 'origin',
+    },
+    {
+      id: 'vary-origin-without',
+      group: 'vary',
+      label: 'Plain request after CORS',
+      query: corsQuery,
+      accept: generic.value,
+      acceptLabel: `${generic.label}, no Origin`,
+      expectHeader: {
+        name: 'access-control-allow-origin',
+        value: '*',
+        hint: `The proxy's cache key ignores Origin: it served the CORS header cached for ${ORIGIN_VALUE} to a request without Origin. Add Origin to the cache key, or always send "*".`,
+      },
+    },
+  ];
+};
+
 export const buildTestCases = (userQuery: string): TestCase[] => {
-  const runWidth = 401 + Math.floor(Math.random() * 400);
+  const runWidth = uniqueWidth(401);
   const negotiationQuery = `w=${runWidth}&auto=format`;
 
   const negotiation = (
@@ -131,5 +180,5 @@ export const buildTestCases = (userQuery: string): TestCase[] => {
       }))
     : [];
 
-  return [...negotiation, ...params, ...custom];
+  return [...negotiation, ...buildVaryCases(), ...params, ...custom];
 };

@@ -49,6 +49,7 @@ type Row = {
 /** Shown beside each test's label, since sections group rows by verdict. */
 const GROUP_TAGS: Record<TestGroup, string> = {
   negotiation: 'negotiation',
+  vary: 'cache key',
   params: 'param',
   custom: 'your query',
 };
@@ -63,6 +64,13 @@ const SECTIONS: { key: SectionKey; title: string }[] = [
 ];
 
 const COLUMN_COUNT = 8;
+
+const LEVEL_ORDER: Level[] = ['fail', 'warn', 'pass'];
+
+const LEVEL_NAMES: Record<Level, string> = { fail: 'failed', warn: 'warning', pass: 'passed' };
+
+/** Failures and warnings need attention; passes start hidden. */
+const DEFAULT_VISIBLE: Record<Level, boolean> = { fail: true, warn: true, pass: false };
 
 /**
  * All state lives in the page's query string, so a link reproduces a run and nothing is stored.
@@ -311,6 +319,10 @@ export const App = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [server, setServer] = useState<ServerInfo | null>(null);
   const [isCopied, setIsCopied] = useState(false);
+  const [visibleLevels, setVisibleLevels] = useState(DEFAULT_VISIBLE);
+  const toggleLevel = (level: Level) =>
+    setVisibleLevels((current) => ({ ...current, [level]: !current[level] }));
+  const isSectionVisible = (key: SectionKey) => key === 'pending' || visibleLevels[key];
   const hasAutoRun = useRef(false);
   const maskUrls = useRef<string[]>([]);
 
@@ -340,8 +352,8 @@ export const App = () => {
 
     const execute = async (test: TestCase) => {
       const [original, proxied] = await Promise.all([
-        probe(withQuery(originBase, test.query), test.accept),
-        probe(withQuery(proxyBase, test.query), test.accept),
+        probe(withQuery(originBase, test.query), test.accept, test.variant),
+        probe(withQuery(proxyBase, test.query), test.accept, test.variant),
       ]);
       const verdict = compare(test, original, proxied);
       setRows((rows) =>
@@ -448,15 +460,26 @@ export const App = () => {
 
       {rows.length > 0 && (
         <section>
-          <p className="summary">
-            <Badge level="pass" /> {counts.pass} <Badge level="warn" /> {counts.warn}{' '}
-            <Badge level="fail" /> {counts.fail}
-            <span className="muted">
-              {' '}
-              · {rows.length} tests · hover a thumbnail to enlarge, click it to open the raw URL,
+          <div className="summary">
+            <p className="muted">
+              {rows.length} tests · hover a thumbnail to enlarge, click it to open the raw URL,
               click a row for full headers
-            </span>
-          </p>
+            </p>
+            <div className="filters" role="group" aria-label="Show results">
+              {LEVEL_ORDER.map((level) => (
+                <button
+                  key={level}
+                  type="button"
+                  className={`filter${visibleLevels[level] ? '' : ' is-off'}`}
+                  aria-pressed={visibleLevels[level]}
+                  title={`${visibleLevels[level] ? 'Hide' : 'Show'} ${LEVEL_NAMES[level]} rows`}
+                  onClick={() => toggleLevel(level)}
+                >
+                  <Badge level={level} /> {counts[level]}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="scroll">
             <table className="results">
               <thead>
@@ -474,56 +497,64 @@ export const App = () => {
               <tbody>
                 {sections.map(({ key, title, rows }) => (
                   <Fragment key={key}>
-                    <tr className={`group group-${key}`}>
+                    <tr
+                      className={`group group-${key}${key === 'pending' ? '' : ' is-toggle'}`}
+                      onClick={() => key !== 'pending' && toggleLevel(key)}
+                    >
                       <td colSpan={COLUMN_COUNT}>
                         {title} ({rows.length})
+                        {!isSectionVisible(key) && (
+                          <span className="muted"> · hidden, click to show</span>
+                        )}
                       </td>
                     </tr>
-                    {rows.map(({ test, original, proxied, verdict, diff }) => (
-                      <Fragment key={test.id}>
-                        <tr
-                          className={`row row-${verdict?.level ?? 'pending'}`}
-                          onClick={() => setExpanded(expanded === test.id ? null : test.id)}
-                        >
-                          <td>
-                            {test.label}
-                            <div className="group-tag">{GROUP_TAGS[test.group]}</div>
-                          </td>
-                          <td>
-                            <code>{test.query || '—'}</code>
-                          </td>
-                          <td>{test.acceptLabel}</td>
-                          <td>
-                            <Result title="Origin (DatoCMS)" result={original} />
-                          </td>
-                          <td>
-                            <Result title="Proxy (customer)" result={proxied} />
-                          </td>
-                          <td>
-                            <DiffCell diff={diff} isPending={!verdict} />
-                          </td>
-                          <td className="muted">{cacheSummary(proxied)}</td>
-                          <td>
-                            <Badge level={verdict?.level} />
-                            {verdict?.notes.map((note) => (
-                              <div key={note} className="note">
-                                {note}
-                              </div>
-                            ))}
-                          </td>
-                        </tr>
-                        {expanded === test.id && (
-                          <tr className="detail">
-                            <td colSpan={COLUMN_COUNT}>
-                              <div className="sides">
-                                <Side title="Origin (DatoCMS)" result={original} />
-                                <Side title="Proxy (customer)" result={proxied} />
-                              </div>
+                    {(isSectionVisible(key) ? rows : []).map(
+                      ({ test, original, proxied, verdict, diff }) => (
+                        <Fragment key={test.id}>
+                          <tr
+                            className={`row row-${verdict?.level ?? 'pending'}`}
+                            onClick={() => setExpanded(expanded === test.id ? null : test.id)}
+                          >
+                            <td>
+                              {test.label}
+                              <div className="group-tag">{GROUP_TAGS[test.group]}</div>
+                            </td>
+                            <td>
+                              <code>{test.query || '—'}</code>
+                            </td>
+                            <td>{test.acceptLabel}</td>
+                            <td>
+                              <Result title="Origin (DatoCMS)" result={original} />
+                            </td>
+                            <td>
+                              <Result title="Proxy (customer)" result={proxied} />
+                            </td>
+                            <td>
+                              <DiffCell diff={diff} isPending={!verdict} />
+                            </td>
+                            <td className="muted">{cacheSummary(proxied)}</td>
+                            <td>
+                              <Badge level={verdict?.level} />
+                              {verdict?.notes.map((note) => (
+                                <div key={note} className="note">
+                                  {note}
+                                </div>
+                              ))}
                             </td>
                           </tr>
-                        )}
-                      </Fragment>
-                    ))}
+                          {expanded === test.id && (
+                            <tr className="detail">
+                              <td colSpan={COLUMN_COUNT}>
+                                <div className="sides">
+                                  <Side title="Origin (DatoCMS)" result={original} />
+                                  <Side title="Proxy (customer)" result={proxied} />
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      ),
+                    )}
                   </Fragment>
                 ))}
               </tbody>

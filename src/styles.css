@@ -133,12 +133,6 @@ button:disabled {
   cursor: default;
 }
 
-.summary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .scroll {
   overflow-x: auto;
   border: 1px solid var(--border);
@@ -237,8 +231,7 @@ table {
   display: block;
   max-width: 100%;
   max-height: 320px;
-  background: repeating-conic-gradient(var(--border) 0 25%, transparent 0 50%) 0
-    0 / 16px 16px;
+  background: repeating-conic-gradient(var(--border) 0 25%, transparent 0 50%) 0 0 / 16px 16px;
 }
 
 .noimg {
@@ -312,7 +305,7 @@ button.secondary {
 .param-grid {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 14px;
 }
 
 .param-row {
@@ -322,12 +315,12 @@ button.secondary {
   gap: 8px;
 }
 
-.param-row.is-disabled input:not([type="checkbox"]) {
+.param-row.is-disabled input:not([type='checkbox']) {
   opacity: 0.45;
   text-decoration: line-through;
 }
 
-.param-row input[type="checkbox"] {
+.param-row input[type='checkbox'] {
   margin-top: 10px;
   width: 16px;
   height: 16px;
@@ -388,8 +381,7 @@ button.secondary {
   border: 1px solid var(--border);
   border-radius: 4px;
   overflow: hidden;
-  background: repeating-conic-gradient(var(--border) 0 25%, transparent 0 50%) 0
-    0 / 10px 10px;
+  background: repeating-conic-gradient(var(--border) 0 25%, transparent 0 50%) 0 0 / 10px 10px;
 }
 
 .thumb > img:first-child {
@@ -414,20 +406,28 @@ button.secondary {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   font-size: 12px;
-  color: var(--text);
-  text-decoration: none;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-a.param-hint:hover {
-  text-decoration: underline;
-}
-
-.param-hint.is-unknown {
   color: var(--muted);
+  white-space: nowrap;
+}
+
+.param-hint a {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+  text-underline-offset: 2px;
+}
+
+.param-hint a:hover {
+  color: var(--text);
+  text-decoration-color: currentColor;
+}
+
+.pill-imgix {
+  flex: none;
 }
 
 .thumb-zoom {
@@ -463,8 +463,7 @@ a.param-hint:hover {
   height: 320px;
   margin-top: 4px;
   object-fit: contain;
-  background: repeating-conic-gradient(var(--border) 0 25%, transparent 0 50%) 0
-    0 / 16px 16px;
+  background: repeating-conic-gradient(var(--border) 0 25%, transparent 0 50%) 0 0 / 16px 16px;
 }
 
 .group-tag {
@@ -591,4 +590,51 @@ a.param-hint:hover {
   .param-row {
     grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto;
   }
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 16px 0 8px;
+}
+
+.summary p {
+  margin: 0;
+}
+
+.filters {
+  display: flex;
+  gap: 16px;
+  margin-left: auto;
+}
+
+.filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.filter:hover {
+  background: var(--hl);
+}
+
+.filter.is-off {
+  opacity: 0.4;
+}
+
+.filter.is-off .badge {
+  text-decoration: line-through;
+}
+
+.results .group.is-toggle {
+  cursor: pointer;
 }

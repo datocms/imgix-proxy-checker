@@ -1,4 +1,5 @@
 import { emptyStats, type ProbeResult } from '../lib/analyze.js';
+import type { RequestVariant } from '../lib/variants.js';
 
 export type ServerInfo = { isAvailable: boolean; region: string | null };
 
@@ -15,12 +16,18 @@ export const detectServer = () => {
   return serverCheck;
 };
 
-/** Asks the checker's server function to fetch `url` with the given `Accept` header. */
-export const probe = async (url: string, accept: string): Promise<ProbeResult> => {
+/** Asks the checker's server function to fetch `url` with the given `Accept` and variant. */
+export const probe = async (
+  url: string,
+  accept: string,
+  variant?: RequestVariant,
+): Promise<ProbeResult> => {
   const startedAt = performance.now();
   try {
     const response = await fetch(
-      `/api/inspect?url=${encodeURIComponent(url)}&accept=${encodeURIComponent(accept)}`,
+      `/api/inspect?url=${encodeURIComponent(url)}&accept=${encodeURIComponent(accept)}${
+        variant ? `&variant=${variant}` : ''
+      }`,
       { cache: 'no-store' },
     );
     const payload = await response.json();

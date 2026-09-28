@@ -23,17 +23,13 @@ const ParamHint = ({ name }: { name: string }) => {
   const param = canonical ? IMGIX_PARAMS[canonical] : undefined;
   if (!param) return <span className="param-hint is-unknown">Not an imgix parameter</span>;
   return (
-    <a
-      className="param-hint"
-      href={param.url}
-      target="_blank"
-      rel="noreferrer"
-      title={param.description}
-    >
+    <span className="param-hint">
       <span className="pill pill-imgix">imgix</span>
-      {param.name}
-      {canonical !== key && <span className="muted"> · alias of {canonical}</span>}
-    </a>
+      <a href={param.url} target="_blank" rel="noreferrer" title={param.description}>
+        {param.name}
+      </a>
+      {canonical !== key && <span> · alias of {canonical}</span>}
+    </span>
   );
 };
 

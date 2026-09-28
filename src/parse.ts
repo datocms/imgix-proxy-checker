@@ -69,25 +69,35 @@ export const splitQuery = (raw: string) => {
     : { base: raw.slice(0, index).trim(), query: raw.slice(index + 1).trim() };
 };
 
-type OriginInput = { projectId?: string; filename?: string; error?: string };
-type ProxyInput = { proxyPrefix?: string; filename?: string; error?: string };
+type ParsedBox = { filename?: string; error?: string };
+type OriginInput = ParsedBox & { projectId?: string };
+type ProxyInput = ParsedBox & { proxyPrefix?: string };
 
-/** The origin box takes a `www.datocms-assets.com` URL, or just a project ID. */
+const MISSING_FILENAME = 'Paste the full image URL, including the filename.';
+
+/** The origin box takes a full `www.datocms-assets.com/<project>/<file>` URL. */
 const parseOriginInput = (raw: string): OriginInput => {
   const text = splitQuery(raw).base;
   if (!text) return {};
-  if (/^\d+$/.test(text)) return { projectId: text };
   const parsed = parseUrlInput(text);
   if (!parsed || parsed.proxyPrefix !== undefined) {
-    return { error: 'Paste a www.datocms-assets.com URL, or just the project ID.' };
+    return { error: 'Paste a www.datocms-assets.com image URL.' };
   }
   if (!/^\d+$/.test(parsed.projectId ?? '')) {
     return { error: 'Expected www.datocms-assets.com/<project ID>/<filename>.' };
   }
-  return { projectId: parsed.projectId, filename: parsed.filename || undefined };
+  if (!parsed.filename) return { projectId: parsed.projectId, error: MISSING_FILENAME };
+  if (!isDatoImageFilename(parsed.filename)) {
+    return {
+      projectId: parsed.projectId,
+      filename: parsed.filename,
+      error: INVALID_FILENAME_MESSAGE,
+    };
+  }
+  return { projectId: parsed.projectId, filename: parsed.filename };
 };
 
-/** The proxy box takes the customer's URL, with or without the filename. */
+/** The proxy box takes the same image's full URL on the customer's domain. */
 const parseProxyInput = (raw: string): ProxyInput => {
   const text = splitQuery(raw).base;
   if (!text) return {};
@@ -98,18 +108,19 @@ const parseProxyInput = (raw: string): ProxyInput => {
       error: "That's the DatoCMS URL, which goes in the origin box. Paste the customer's URL here.",
     };
   }
-  // A last segment with an extension that isn't a Dato filename would otherwise become a folder.
-  if (!parsed.filename && /\/[^/]+\.[a-z0-9]{2,5}\/$/i.test(parsed.proxyPrefix)) {
-    return { error: INVALID_FILENAME_MESSAGE };
+  if (!parsed.filename) {
+    // A last segment with an extension means a filename that isn't a DatoCMS upload name.
+    const hasExtension = /\/[^/]+\.[a-z0-9]{2,5}\/$/i.test(parsed.proxyPrefix);
+    return { error: hasExtension ? INVALID_FILENAME_MESSAGE : MISSING_FILENAME };
   }
   return { proxyPrefix: parsed.proxyPrefix, filename: parsed.filename };
 };
 
 export type Endpoints = {
   projectId: string;
-  filename: string;
   proxyPrefix: string;
-  /** The filename each box contained itself; `filename` takes the origin's when both do. */
+  /** Shared by both URLs once they agree. */
+  filename: string;
   originFilename?: string;
   proxyFilename?: string;
   originError?: string;
@@ -117,32 +128,28 @@ export type Endpoints = {
   isComplete: boolean;
 };
 
-/** Combines both boxes into the values a run needs, with a per-box error when they disagree. */
+/**
+ * Combines both boxes into the values a run needs. Both must be full URLs with the same
+ * filename: that's the only way to be sure both sides serve the same image.
+ */
 export const resolveEndpoints = (originRaw: string, proxyRaw: string): Endpoints => {
   const origin = parseOriginInput(originRaw);
   const proxy = parseProxyInput(proxyRaw);
-  const filename = origin.filename ?? proxy.filename ?? '';
-
-  let { error: originError } = origin;
-  let { error: proxyError } = proxy;
-  if (origin.filename && proxy.filename && origin.filename !== proxy.filename) {
+  let proxyError = proxy.error;
+  if (!origin.error && origin.filename && proxy.filename && origin.filename !== proxy.filename) {
     proxyError ??= `Filename differs from the origin's (${origin.filename}).`;
   }
-  if (filename && !isDatoImageFilename(filename)) {
-    if (origin.filename) originError ??= INVALID_FILENAME_MESSAGE;
-    else proxyError ??= INVALID_FILENAME_MESSAGE;
-  }
-
-  const projectId = origin.projectId ?? '';
-  const proxyPrefix = proxy.proxyPrefix ?? '';
+  const isComplete = Boolean(
+    origin.projectId && origin.filename && proxy.proxyPrefix && !origin.error && !proxyError,
+  );
   return {
-    projectId,
-    filename,
-    proxyPrefix,
+    projectId: origin.projectId ?? '',
+    proxyPrefix: proxy.proxyPrefix ?? '',
+    filename: isComplete ? (origin.filename as string) : '',
     originFilename: origin.filename,
     proxyFilename: proxy.filename,
-    originError,
+    originError: origin.error,
     proxyError,
-    isComplete: Boolean(projectId && filename && proxyPrefix && !originError && !proxyError),
+    isComplete,
   };
 };

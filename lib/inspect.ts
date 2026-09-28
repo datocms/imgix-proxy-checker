@@ -1,5 +1,6 @@
 import { analyzeBody, emptyStats, isPreviewable, type ProbeResult } from './analyze.js';
 import { INVALID_FILENAME_MESSAGE, isDatoImageUrl } from './filename.js';
+import { isRequestVariant, REQUEST_VARIANTS, type RequestVariant } from './variants.js';
 
 /** Base64 inflates by a third; this keeps the JSON under Vercel's 4.5 MB response limit. */
 const MAX_PREVIEW_BYTES = 2_500_000;
@@ -32,12 +33,22 @@ const rejectTarget = (raw: string) => {
   }
 };
 
-/** Fetches `url` server-side with the given `Accept` and no caching, and describes the response. */
-export const inspect = async (url: string, accept: string): Promise<ProbeResult> => {
+/**
+ * Fetches `url` server-side with the given `Accept`, plus an optional checker-defined header
+ * variant, with no caching, and describes the response.
+ */
+export const inspect = async (
+  url: string,
+  accept: string,
+  variant?: RequestVariant,
+): Promise<ProbeResult> => {
+  const extraHeaders: Record<string, string> = variant
+    ? { [REQUEST_VARIANTS[variant].header]: REQUEST_VARIANTS[variant].value }
+    : {};
   const startedAt = performance.now();
   try {
     const response = await fetch(url, {
-      headers: { accept },
+      headers: { accept, ...extraHeaders },
       cache: 'no-store',
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
@@ -71,7 +82,10 @@ export const inspect = async (url: string, accept: string): Promise<ProbeResult>
   }
 };
 
-/** `GET /api/inspect?url=…&accept=…`, or `?ping=1` to detect the server and its region. */
+/**
+ * `GET /api/inspect?url=…&accept=…[&variant=origin]`, or `?ping=1` to detect the server
+ * and its region.
+ */
 export const handleInspectRequest = async (request: Request) => {
   const params = new URL(request.url).searchParams;
 
@@ -88,5 +102,13 @@ export const handleInspectRequest = async (request: Request) => {
     return Response.json({ error: rejection }, { status: 400, headers: NO_STORE });
   }
 
-  return Response.json(await inspect(url, params.get('accept') ?? '*/*'), { headers: NO_STORE });
+  const variant = params.get('variant');
+  return Response.json(
+    await inspect(
+      url,
+      params.get('accept') ?? '*/*',
+      isRequestVariant(variant) ? variant : undefined,
+    ),
+    { headers: NO_STORE },
+  );
 };

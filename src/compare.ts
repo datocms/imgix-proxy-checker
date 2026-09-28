@@ -76,9 +76,19 @@ export const compare = (test: TestCase, original: ProbeResult, proxied: ProbeRes
     );
   }
 
+  if (test.expectHeader) {
+    const { name, value, hint } = test.expectHeader;
+    const actual = proxied.headers[name];
+    if (actual !== value) {
+      flag('fail', `${name}: expected "${value}", proxy sent "${actual ?? '(missing)'}". ${hint}`);
+    }
+  }
+
   for (const [name, isRequired] of Object.entries(RELAYED_HEADERS)) {
     const expected = original.headers[name];
-    if (!expected) continue;
+    if (!expected || name === test.expectHeader?.name) continue;
+    // With an Origin header, the origin echoes it; a proxy answering "*" is equally valid.
+    if (name === 'access-control-allow-origin' && test.variant === 'origin') continue;
     const actual = proxied.headers[name];
     if (name === 'access-control-allow-origin' && actual && actual !== '*' && expected === '*') {
       flag(
@@ -95,5 +105,7 @@ export const compare = (test: TestCase, original: ProbeResult, proxied: ProbeRes
     }
   }
 
+  if (level !== 'pass' && test.failureHint) notes.push(test.failureHint);
+  if (test.maxLevel && RANK[level] > RANK[test.maxLevel]) level = test.maxLevel;
   return { level, notes };
 };

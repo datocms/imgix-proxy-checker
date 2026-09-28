@@ -3,7 +3,7 @@ import { type Endpoints as ResolvedEndpoints, splitQuery } from './parse';
 
 export const ORIGIN_HOST = 'https://www.datocms-assets.com';
 
-type Fact = { label: string; value?: string; note?: string };
+type Fact = { label: string; value?: string };
 
 type BoxProps = {
   side: 'origin' | 'proxy';
@@ -56,13 +56,10 @@ const EndpointBox = ({
       />
       {error && <p className="warn-text">{error}</p>}
       <dl className="facts">
-        {facts.map(({ label, value, note }) => (
+        {facts.map(({ label, value }) => (
           <div key={label}>
             <dt>{label}</dt>
-            <dd className={value ? undefined : 'is-missing'}>
-              {value || '—'}
-              {note && <span className="muted"> {note}</span>}
-            </dd>
+            <dd className={value ? undefined : 'is-missing'}>{value || '—'}</dd>
           </div>
         ))}
       </dl>
@@ -109,12 +106,10 @@ export const Endpoints = ({
   onProxyChange,
   onQuery,
 }: EndpointsProps) => {
-  const { projectId, filename, proxyPrefix, originFilename, proxyFilename } = resolved;
-  // Each box shows its own filename, so a mismatch stays visible; it borrows the other's if empty.
-  const originFile = originFilename ?? filename;
-  const proxyFile = proxyFilename ?? filename;
-  const originUrl = projectId && originFile ? `${ORIGIN_HOST}/${projectId}/${originFile}` : '';
-  const proxyUrl = proxyPrefix && proxyFile ? `${proxyPrefix}${proxyFile}` : '';
+  const { projectId, proxyPrefix, originFilename, proxyFilename } = resolved;
+  const originUrl =
+    projectId && originFilename ? `${ORIGIN_HOST}/${projectId}/${originFilename}` : '';
+  const proxyUrl = proxyPrefix && proxyFilename ? `${proxyPrefix}${proxyFilename}` : '';
 
   return (
     <div className="endpoints wide">
@@ -123,7 +118,7 @@ export const Endpoints = ({
         title="Origin (DatoCMS)"
         subtitle={
           <>
-            A <code>www.datocms-assets.com</code> URL, or just the project ID.
+            The image's full <code>www.datocms-assets.com</code> URL.
           </>
         }
         value={originInput}
@@ -133,11 +128,7 @@ export const Endpoints = ({
         onQuery={onQuery}
         facts={[
           { label: 'Project ID', value: projectId },
-          {
-            label: 'Filename',
-            value: originFile,
-            note: originFile && !originFilename ? '(from proxy URL)' : undefined,
-          },
+          { label: 'Filename', value: originFilename },
           { label: 'Tested URL', value: originUrl },
         ]}
       />
@@ -145,7 +136,7 @@ export const Endpoints = ({
       <EndpointBox
         side="proxy"
         title="Proxy (customer)"
-        subtitle="The same image through the customer's domain, or just their asset path."
+        subtitle="The same image's full URL on the customer's domain."
         value={proxyInput}
         placeholder="https://example.com/assets/1700000000-photo.png"
         error={resolved.proxyError}
@@ -154,11 +145,7 @@ export const Endpoints = ({
         facts={[
           { label: 'Host', value: hostOf(proxyPrefix) },
           { label: 'Path prefix', value: proxyPrefix && new URL(proxyPrefix).pathname },
-          {
-            label: 'Filename',
-            value: proxyFile,
-            note: proxyFile && !proxyFilename ? '(from origin URL)' : undefined,
-          },
+          { label: 'Filename', value: proxyFilename },
           { label: 'Tested URL', value: proxyUrl },
         ]}
       />
